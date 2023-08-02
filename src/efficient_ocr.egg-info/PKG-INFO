@@ -1,0 +1,26 @@
+Metadata-Version: 2.1
+Name: efficient-ocr
+Version: 0.0.1
+Summary: Efficient OCR
+Home-page: https://github.com/dell-research-harvard/efficient_ocr
+Author: Tom Bryan, Abhishek Arora, Jacob Carlson
+Author-email: bryanptom@gmail.com
+License: Apache-2.0
+Keywords: layout analysis,deep learning
+Platform: UNKNOWN
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Education
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# efficient_ocr
+

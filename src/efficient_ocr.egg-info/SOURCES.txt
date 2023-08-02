@@ -1,0 +1,13 @@
+LICENSE
+README.md
+setup.cfg
+setup.py
+src/efficient_ocr/__init__.py
+src/efficient_ocr.egg-info/PKG-INFO
+src/efficient_ocr.egg-info/SOURCES.txt
+src/efficient_ocr.egg-info/dependency_links.txt
+src/efficient_ocr.egg-info/not-zip-safe
+src/efficient_ocr.egg-info/requires.txt
+src/efficient_ocr.egg-info/top_level.txt
+src/efficient_ocr/utils/__init__.py
+src/efficient_ocr/utils/ops.py

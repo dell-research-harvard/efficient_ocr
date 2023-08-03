@@ -5,6 +5,7 @@ import json
 import numpy as np
 from .detection import train_line, train_localizer, infer_line, infer_localizer
 from .recognition import train_word, train_char, infer_word, infer_char
+from .models import line_model, localizer_model, word_model, char_model
 
 class EffOCR:
 
@@ -78,5 +79,21 @@ class EffOCR:
         char_results = infer_char(word_results, self.char_model, **kwargs) # Passes back predidctions
 
         return char_results
+    
+    '''
+    Model Initialization Functions
+    '''
+
+    def _initialize_line(self):
+        return None
+    
+    def _initialize_localizer(self):
+        return None
+    
+    def _initialize_word_recognizer(self):
+        return None
+    
+    def _initialize_char_recognizer(self):
+        return None
     
 

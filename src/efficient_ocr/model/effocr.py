@@ -6,7 +6,7 @@ import numpy as np
 import cv2
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
 # from .recognition import train_word, train_char, infer_word, infer_char
-from ..detection import LineModel LocalizerModel # , word_model, char_model
+from ..detection import LineModel, LocalizerModel # , word_model, char_model
 
 class EffOCR:
 
@@ -85,7 +85,25 @@ class EffOCR:
     
     ### TOM
     def infer(self, imgs, **kwargs):
+        '''
+        Inference pipeline has five steps:
+        1. Loading and formatting images
+        2. Line Detection
+        3. Word and Character Detection
+        4. Word Recognition
+        5. Character Recognition
+
+        Each input/output format is defined in the body
+        '''
         
+        '''
+        Loading and Formatting Images:
+            Input: images as one of:
+                1. A single image path
+                2. A single numpy array
+                3. A list of image paths
+                4. A list of numpy arrays
+        '''
         if isinstance(imgs, str):
             imgs = [imgs]
         elif isinstance(imgs, np.ndarray):
@@ -97,8 +115,25 @@ class EffOCR:
         
         imgs = self._load_and_format_images(imgs)
 
-        line_results = self.line_model(imgs, **kwargs) # Passes back detections and cropped images
+        '''
+        Line Detection:
+            Input: images as a list of numpy arrays
+            Output: detections as defaultdict(list):
+                mapping the index of the original image (in the order they were passed from the above function) to a list of tuples, 
+                with each tuple in the format (textline img, (bounding box coordinates (y0, x0, y1, x1)))
+        '''
+
+        line_results = self.line_model(imgs, **kwargs) 
+
+        '''
+        Word and character localization:
+            Input: detections as a defaultdict(list) as described above
+            Output: 
+        '''
         # localizer_results = infer_localizer(line_results, self.localizer_model, **kwargs) # Passes back detections and cropped images
+        
+        
+        
         # word_results = infer_word(localizer_results, self.word_model, **kwargs) #Passes back predictions and chars to be recognized
         # char_results = infer_char(word_results, self.char_model, **kwargs) # Passes back predidctions
 

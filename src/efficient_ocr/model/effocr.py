@@ -6,7 +6,7 @@ import numpy as np
 import cv2
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
 # from .recognition import train_word, train_char, infer_word, infer_char
-from ..detection import LineModel # localizer_model, word_model, char_model
+from ..detection import LineModel LocalizerModel # , word_model, char_model
 
 class EffOCR:
 

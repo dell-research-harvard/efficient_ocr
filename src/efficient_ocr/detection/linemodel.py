@@ -95,7 +95,7 @@ class LineModel:
         else:
             raise ValueError('Invalid model backend specified! Must be one of yolo, onnx, or mmdetection')
     
-    def run(self, imgs, visualize = None):
+    def run(self, imgs):
 
         if isinstance(imgs, list):
             if all(isinstance(img, np.ndarray) for img in imgs):

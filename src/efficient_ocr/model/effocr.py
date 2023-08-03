@@ -112,7 +112,7 @@ class EffOCR:
         return LineModel(self.config)
     
     def _initialize_localizer(self):
-        return None
+        return LocalizerModel(self.config)
     
     def _initialize_word_recognizer(self):
         return None

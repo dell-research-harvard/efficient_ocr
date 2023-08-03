@@ -165,3 +165,7 @@ cython_debug/
 
 # ONNX Models
 *.onnx
+
+# Some test fixtures
+tests/fixtures/lines/
+tests/fixtures/localizer/

@@ -8,6 +8,23 @@ import cv2
 DEFAULT_MEAN = np.array([123.675, 116.28, 103.53], dtype=np.float32)
 DEFAULT_STD = np.array([58.395, 57.12, 57.375], dtype=np.float32)
 
+def create_batches(data, batch_size = 64, transform = None):
+    """Create batches for inference"""
+
+    batches = []
+    batch = []
+    for i, d in enumerate(data):
+        if d is not None:
+            batch.append(d)
+        else:
+            batch.append(np.zeros((33, 33, 3), dtype=np.int8))
+        if (i+1) % batch_size == 0:
+            batches.append(batch)
+            batch = []
+    if len(batch) > 0:
+        batches.append(batch)
+    return [b for b in batches]
+
 def get_onnx_input_name(model):
     input_all = [node.name for node in model.graph.input]
     input_initializer =  [node.name for node in model.graph.initializer]

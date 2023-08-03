@@ -16,7 +16,7 @@ from collections import defaultdict
 from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, get_onnx_input_name, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
 
-DEFAULT_LINE_CONFIG = { 'line_model_path': 'yolov5s.pt',
+DEFAULT_LINE_CONFIG = { 'line_model_path': './models/yolo/line_model.pt',
                         'iou_thresh': 0.15,
                         'conf_thresh': 0.20, 
                         'num_cores': None,
@@ -49,7 +49,6 @@ class LineModel:
         """
 
         '''Set up the config'''
-        print(config)
         self.config = config
         for key, value in DEFAULT_LINE_CONFIG.items():
             if key not in self.config:
@@ -58,10 +57,10 @@ class LineModel:
         for key, value in kwargs.items():
             self.config[key] = value
 
-        self.model = self.initialize_model()
+        self.initialize_model()
 
 
-    def __call__(self, imgs, visualize = None):
+    def __call__(self, imgs):
         """Wraps the run method, allowing the object to be called directly
 
         Args:
@@ -70,7 +69,7 @@ class LineModel:
         Returns:
             _type_: _description_
         """
-        return self.run(imgs, visualize = visualize)
+        return self.run(imgs)
     
     
     def initialize_model(self):
@@ -81,6 +80,7 @@ class LineModel:
         """
         if self.config['model_backend'] == 'yolo':
             self.model = yolov5.load(self.config['line_model_path'], device='cpu')
+            print(type(self.model))
             self.model.conf = self.config['conf_thresh']  # NMS confidence threshold
             self.model.iou = self.config['iou_thresh']  # NMS IoU threshold
             self.model.agnostic = False  # NMS class-agnostic
@@ -116,7 +116,7 @@ class LineModel:
         if self.config['model_backend'] == 'onnx':    
             results = [self.model.run(None, {self._input_name: img}) for img in imgs]
         elif self.config['model_backend'] == 'yolo':
-            results = [self.model(img, augment=False)[0] for img in imgs]
+            results = [self.model(img, augment=False) for img in imgs]
         elif self.config['model_backend'] == 'mmdetection':
             raise NotImplementedError('mmdetection not yet implemented!')
         
@@ -130,7 +130,7 @@ class LineModel:
             preds = [yolov5_non_max_suppression(pred, conf_thres = self._conf_thresh, iou_thres=self._iou_thresh, max_det=100)[0] for pred in preds]
 
         elif self.config['model_backend'] == 'yolo':
-            preds = [results.pred[0] for results in results]
+            preds = [result.pred[0] for result in results]
 
         elif self._model_backend == 'mmdetection':
             raise NotImplementedError('mmdetection not yet implemented!')
@@ -138,12 +138,12 @@ class LineModel:
         ### At this point preds is a list of
         start = 0
         final_preds = []
-        for idxs in enumerate(num_img_crops):
+        for idxs in num_img_crops:
             preds = self.adjust_line_preds(preds[start:start+idxs], imgs[start:start+idxs], img_shapes[start:start+idxs])
             final_preds.append(self.readjust_line_predictions(preds, imgs[start].shape[1]))
             start += idxs
 
-        line_crops, line_coords = defaultdict(list), defaultdict(list)
+        line_results = defaultdict(list)
         for i, final_pred in enumerate(final_preds):
             for line_proj_crop in final_pred:
                 x0, y0, x1, y1 = map(round, line_proj_crop)
@@ -152,10 +152,9 @@ class LineModel:
                     continue
 
                 # Line crops becomes a list of tuples (bbox_id, line_crop [the image itself], line_proj_crop [the coordinates of the line in the layout image])
-                line_crops[i].append(np.array(line_crop).astype(np.float32))
-                line_coords[i].append((y0, x0, y1, x1))
+                line_results[i].append((np.array(line_crop).astype(np.float32), (y0, x0, y1, x1)))
                             
-        return (line_crops, line_coords)
+        return line_results
 
 
     def adjust_line_preds(self, preds, imgs, orig_shapes):
@@ -166,20 +165,32 @@ class LineModel:
             line_bboxes, line_confs, line_labels = line_predictions[:, :4], line_predictions[:, -2], line_predictions[:, -1]
 
             im_width, im_height = shape[1], shape[0]
-            if im_width > im_height:
-                h_ratio = (im_height / im_width) * 640
-                h_trans = 640 * ((1 - (im_height / im_width)) / 2)
-            else:
-                h_trans = 0
-                h_ratio = 640
+            if self.config['model_backend'] == 'onnx':
+                if im_width > im_height:
+                    h_ratio = (im_height / im_width) * 640
+                    h_trans = 640 * ((1 - (im_height / im_width)) / 2)
+                else:
+                    h_trans = 0
+                    h_ratio = 640
 
-            line_proj_crops = []
-            for line_bbox in line_bboxes:
-                x0, y0, x1, y1 = torch.round(line_bbox)
-                x0, y0, x1, y1 = 0, int(floor((y0.item() - h_trans) * im_height / h_ratio)), \
-                                im_width, int(ceil((y1.item() - h_trans) * im_height  / h_ratio))
-            
-                line_proj_crops.append((x0, y0, x1, y1))
+                line_proj_crops = []
+                for line_bbox in line_bboxes:
+                    x0, y0, x1, y1 = torch.round(line_bbox)
+                    x0, y0, x1, y1 = 0, int(floor((y0.item() - h_trans) * im_height / h_ratio)), \
+                                    im_width, int(ceil((y1.item() - h_trans) * im_height  / h_ratio))
+                
+                    line_proj_crops.append((x0, y0, x1, y1))
+
+            # No need to rescale when using yolo natively
+            elif self.config['model_backend'] == 'yolo':
+                line_proj_crops = []
+                for line_bbox in line_bboxes:
+                    x0, y0, x1, y1 = torch.round(line_bbox)
+                    x0, y0, x1, y1 = 0, y0, im_width, y1
+                    line_proj_crops.append((x0, y0, x1, y1))
+
+            elif self.config['model_backend'] == 'mmdetection':
+                raise NotImplementedError('mmdetection not yet implemented!')
             
             adjusted_preds.append((line_proj_crops, line_confs, line_labels))
 
@@ -218,7 +229,7 @@ class LineModel:
                 im = np.expand_dims(im, 0)
         
         elif self.config['model_backend'] == 'yolo':
-            pass
+            im = img
 
         elif self.config['model_backend'] == 'mmdetection':
             raise NotImplementedError('Backend mmdetection is not implemented')
@@ -228,9 +239,9 @@ class LineModel:
         
         return im
 
-    def get_crops_from_layout_image(self, image, idx):
+    def get_crops_from_layout_image(self, image):
         im_width, im_height = image.shape[0], image.shape[1]
-        if im_height <= im_width * self.min_seg_ratio:
+        if im_height <= im_width * self.config['min_seg_ratio']:
             return [image]
         else:
             y0 = 0
@@ -242,4 +253,4 @@ class LineModel:
                 y1 += int(im_width * self.min_seg_ration * 0.75)
             
             crops.append(image.crop((0, y0, im_width, im_height)))
-            return [(idx, crop) for crop in crops]
+            return crops

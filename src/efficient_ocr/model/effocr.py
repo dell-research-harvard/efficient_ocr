@@ -128,12 +128,44 @@ class EffOCR:
         '''
         Word and character localization:
             Input: detections as a defaultdict(list) as described above
-            Output: 
+            Output: detections as a dictionary with format:
+                { bbox_idx: {
+                        line_idx: {
+                            'words': [(word_img, (y0, x0, y1, x1)), ...],
+                            'chars': [(char_img, (y0, x0, y1, x1)), ...],
+                            'overlaps': [[char_idx, char_idx, ...], ...],
+                            'para_end': bool
+                        },
+                        ...
+                    },
+                    ...
+                }}
         '''
-        # localizer_results = infer_localizer(line_results, self.localizer_model, **kwargs) # Passes back detections and cropped images
+        localizer_results = self.localizer_model(line_results, **kwargs) # Passes back detections and cropped images
         
         
-        
+        '''
+        Last character recognition:
+            Input: detections as a dictionary with format as described above
+            Output: detections as a dictionary with similar format, but with:
+                { bbox_idx: {
+                        line_idx: {
+                            'words': [(word_img, (y0, x0, y1, x1)), ...],
+                            'chars': [(char_img, (y0, x0, y1, x1)), ...],
+                            'overlaps': [[char_idx, char_idx, ...], ...],
+                            'para_end': bool,
+                            'final_puncs': [word_end, ...]
+                        },
+                        ...
+                    },
+                    ...
+                }}
+
+                Where 'final_puncs' is a list with the same length as the word list for each entry, with the predicted final character of that word, if it is a punctuation mark. 
+                If a punctuation mark was detected, all of the characters list, the overlaps object, and the word image and bounding boxes will be adjusted to reflect that detection. 
+        '''
+
+
         # word_results = infer_word(localizer_results, self.word_model, **kwargs) #Passes back predictions and chars to be recognized
         # char_results = infer_char(word_results, self.char_model, **kwargs) # Passes back predidctions
 

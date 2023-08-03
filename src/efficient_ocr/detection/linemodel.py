@@ -11,12 +11,12 @@ import torchvision
 import cv2
 from math import floor, ceil
 import yolov5
-from collection import defaultdict
+from collections import defaultdict
 
 from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, get_onnx_input_name, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
 
-DEFAULT_LINE_CONFIG = { 'model_path': 'yolov5s.pt',
+DEFAULT_LINE_CONFIG = { 'line_model_path': 'yolov5s.pt',
                         'iou_thresh': 0.15,
                         'conf_thresh': 0.20, 
                         'num_cores': None,
@@ -25,7 +25,8 @@ DEFAULT_LINE_CONFIG = { 'model_path': 'yolov5s.pt',
                         'model_backend': 'yolo',
                         'min_seg_ratio': 2,
                         'visualize': None,
-                        'num_cores': None}
+                        'num_cores': None,
+                        'max_det': 200}
 
 class LineModel:
     """
@@ -48,6 +49,7 @@ class LineModel:
         """
 
         '''Set up the config'''
+        print(config)
         self.config = config
         for key, value in DEFAULT_LINE_CONFIG.items():
             if key not in self.config:
@@ -78,7 +80,7 @@ class LineModel:
             _type_: _description_
         """
         if self.config['model_backend'] == 'yolo':
-            self.model = yolov5.load(self.config['model_path'], device='cpu')
+            self.model = yolov5.load(self.config['line_model_path'], device='cpu')
             self.model.conf = self.config['conf_thresh']  # NMS confidence threshold
             self.model.iou = self.config['iou_thresh']  # NMS IoU threshold
             self.model.agnostic = False  # NMS class-agnostic
@@ -86,7 +88,7 @@ class LineModel:
             self.model.max_det = self.config['max_det']  # maximum number of detections per image
 
         elif self.config['model_backend'] == 'onnx':
-            self.model, self.input_name, self.input_shape = initialize_onnx_model(self.config)
+            self.model, self.input_name, self.input_shape = initialize_onnx_model(self.config['line_model_path'], self.config)
 
         elif self.config['model_backend'] == 'mmdetection':
             raise NotImplementedError('mmdetection not yet implemented!')

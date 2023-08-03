@@ -2,11 +2,11 @@ import onnxruntime as ort
 import onnx
 from ..utils import get_onnx_input_name
 
-def initialize_onnx_model(config):
+def initialize_onnx_model(model_path, config):
     """
     Initializes an ONNX model from a path to an ONNX file.
     """
-    model_path = config['model_path']
+    model_path = model_path
     sess_options = ort.SessionOptions()
     if config['num_cores'] is not None:
         sess_options.intra_op_num_threads = config['num_cores']

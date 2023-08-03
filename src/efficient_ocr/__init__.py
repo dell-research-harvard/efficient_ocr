@@ -1,5 +1,5 @@
 from .utils import *
-from .detection import *
+from .detection import LineModel
 from .recognition import *
 from .inference import *
-from effocr import EffOCR
+from .model.effocr import EffOCR

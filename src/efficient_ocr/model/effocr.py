@@ -3,29 +3,53 @@ EffOCR Main Class
 '''
 import json
 import numpy as np
-from .detection import train_line, train_localizer, infer_line, infer_localizer
-from .recognition import train_word, train_char, infer_word, infer_char
-from .models import line_model, localizer_model, word_model, char_model
+import cv2
+# from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
+# from .recognition import train_word, train_char, infer_word, infer_char
+from ..detection import LineModel # localizer_model, word_model, char_model
 
 class EffOCR:
 
-
     def __init__(self, data_json, config_json, **kwargs):
 
-        self.training_funcs = {'line_detection': self.train_line,
-                                'word_and_character_detection': self.train_localizer,
-                                'word_recognition': self.train_word,
-                                'char_recognition': self.train_char}
+        self.training_funcs = {'line_detection': self._train_line,
+                                'word_and_character_detection': self._train_localizer,
+                                'word_recognition': self._train_word_recognizer,
+                                'char_recognition': self._train_char_recognizer}
+        
         
         with open(data_json, 'r') as f:
             self.data_json = json.load(f)
 
         self.config = self._load_config(config_json)
+        print(self.config)
 
         self.line_model = self._initialize_line()
         self.localizer_model = self._initialize_localizer()
         self.word_model = self._initialize_word_recognizer()
         self.char_model = self._initialize_char_recognizer()
+
+    def _load_config(self, config_json, **kwargs):
+        if isinstance(config_json, str):
+            with open(config_json, 'r') as f:
+                config = json.load(f)
+        elif isinstance(config_json, dict):
+            config = config_json
+        else:
+            raise ValueError('config_json must be a path to a json file or a dictionary')
+        
+        if kwargs:
+            for k, v in kwargs.items():
+                config[k] = v
+        
+        return config
+    
+    def _load_and_format_images(self, imgs):
+        if all([isinstance(img, str) for img in imgs]):
+            imgs = [cv2.imread(img) for img in imgs]
+        elif all([isinstance(img, np.ndarray) for img in imgs]):
+            pass
+        return imgs
 
     def train(self, target = None, **kwargs):
         
@@ -73,19 +97,19 @@ class EffOCR:
         
         imgs = self._load_and_format_images(imgs)
 
-        line_results = infer_line(imgs, self.line_model, **kwargs) # Passes back detections and cropped images
-        localizer_results = infer_localizer(line_results, self.localizer_model, **kwargs) # Passes back detections and cropped images
-        word_results = infer_word(localizer_results, self.word_model, **kwargs) #Passes back predictions and chars to be recognized
-        char_results = infer_char(word_results, self.char_model, **kwargs) # Passes back predidctions
+        line_results = self.line_model(imgs, **kwargs) # Passes back detections and cropped images
+        # localizer_results = infer_localizer(line_results, self.localizer_model, **kwargs) # Passes back detections and cropped images
+        # word_results = infer_word(localizer_results, self.word_model, **kwargs) #Passes back predictions and chars to be recognized
+        # char_results = infer_char(word_results, self.char_model, **kwargs) # Passes back predidctions
 
-        return char_results
+        return line_results
     
     '''
     Model Initialization Functions
     '''
 
     def _initialize_line(self):
-        return None
+        return LineModel(self.config)
     
     def _initialize_localizer(self):
         return None

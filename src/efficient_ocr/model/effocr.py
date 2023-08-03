@@ -5,7 +5,7 @@ import json
 import numpy as np
 import cv2
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
-# from .recognition import train_word, train_char, infer_word, infer_char
+from ..recognition import Recognizer, infer_last_chars, infer_words, infer_chars
 from ..detection import LineModel, LocalizerModel # , word_model, char_model
 
 class EffOCR:
@@ -50,6 +50,9 @@ class EffOCR:
         elif all([isinstance(img, np.ndarray) for img in imgs]):
             pass
         return imgs
+    
+    def _postprocess(self, results, **kwargs):
+        return results
 
     def train(self, target = None, **kwargs):
         
@@ -161,15 +164,67 @@ class EffOCR:
                     ...
                 }}
 
-                Where 'final_puncs' is a list with the same length as the word list for each entry, with the predicted final character of that word, if it is a punctuation mark. 
+                Where 'final_puncs' is a list with the same length as the word list for each entry, with the predicted final character of each word, if it is a punctuation mark. 
                 If a punctuation mark was detected, all of the characters list, the overlaps object, and the word image and bounding boxes will be adjusted to reflect that detection. 
         '''
 
+        last_char_results = infer_last_chars(localizer_results, self.char_model, **kwargs) # Passes back detections and cropped images
 
-        # word_results = infer_word(localizer_results, self.word_model, **kwargs) #Passes back predictions and chars to be recognized
-        # char_results = infer_char(word_results, self.char_model, **kwargs) # Passes back predidctions
+        '''
+        Word Recognition: 
+            Input: detections as a dictionary with format as described above under Last Char Recognition
+            Output: detections as a dictionary with similar format, but with:
+                
+                { bbox_idx: {
+                        line_idx: {
+                            'words': [(word_img, (y0, x0, y1, x1)), ...],
+                            'chars': [(char_img, (y0, x0, y1, x1)), ...],
+                            'overlaps': [[char_idx, char_idx, ...], ...],
+                            'para_end': bool,
+                            'final_puncs': [word_end, ...],
+                            'word_preds': [word_pred, ...]
+                        },
+                        ...
+                    },
+                    ...
+                }}
 
-        return line_results
+            Where 'word_preds' is a list with the same length as the word list for each entry, with the predicted text of that word, if the prediction was confident enough to 
+            be over the cosine similarity threshold. If the prediction was not confident enough, the prediction will be "None".
+            Regardless of predictions, the word image and bounding boxes stay the same.
+
+        '''
+        word_results = infer_words(localizer_results, self.word_model, **kwargs) 
+
+        '''
+        Character Recognition:
+            Input: detections as a dictionary with format as described above under Word Recognition
+            Output: detections as a dictionary with the exact same format, that is:
+                
+                { bbox_idx: {
+                        line_idx: {
+                            'words': [(word_img, (y0, x0, y1, x1)), ...],
+                            'chars': [(char_img, (y0, x0, y1, x1)), ...],
+                            'overlaps': [[char_idx, char_idx, ...], ...],
+                            'para_end': bool,
+                            'final_puncs': [word_end, ...],
+                            'word_preds': [word_pred, ...]
+                        },
+                        ...
+                    },
+                    ...
+                }}
+
+            Where 'word_preds' is fully filled out. For any word with a None prediction passed in, all overlapping characters have been recognized and combined to create the 
+            word prediction. 
+        '''
+        char_results = infer_chars(word_results, self.char_model, **kwargs) # Passes back predidctions
+
+        # TBD what we do for postprocessing (likely will be combining all line predictions within a bounding box into a single text, then returning those texts as a list)
+        # Passes through for now. 
+        final_results = self._postprocess(char_results, **kwargs)
+
+        return 
     
     '''
     Model Initialization Functions
@@ -182,9 +237,9 @@ class EffOCR:
         return LocalizerModel(self.config)
     
     def _initialize_word_recognizer(self):
-        return None
+        return Recognizer(self.config, 'word')
     
     def _initialize_char_recognizer(self):
-        return None
+        return Recognizer(self.config, 'char')
     
 

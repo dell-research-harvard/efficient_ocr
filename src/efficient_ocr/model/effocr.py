@@ -88,7 +88,7 @@ class EffOCR:
 
     ### TOM (and Jake)
     def _train_localizer(self, **kwargs):
-        self.localizer_model = train_localizer(self.localizer_model, self.data_json, self.config, **kwargs)
+        self.localizer_model.train(self.data_json, **kwargs)
 
     ### ABHISHEK (and Jake)
     def _train_word_recognizer(self, **kwargs):

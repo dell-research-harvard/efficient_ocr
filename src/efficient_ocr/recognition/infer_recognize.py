@@ -39,6 +39,9 @@ def infer_chars(word_results, recognizer):
             for i, p in enumerate(word_results[bbox_idx][line_idx]['final_puncs']):
                 if p is not None:
                     word_results[bbox_idx][line_idx]['word_preds'][i] += p
+            
+            if word_results[bbox_idx][line_idx]['para_end']:
+                word_results[bbox_idx][line_idx]['word_preds'][-1] += '\n'
 
     return word_results
 

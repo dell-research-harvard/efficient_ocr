@@ -85,8 +85,6 @@ def test_line_det():
     assert char_results[0][1]['word_preds'] == ['Rollie', 'Davis', 'and', 'Harry', 'Raymond', 'on']
 
 
-def test_localizer():
-    pass
 
 
     

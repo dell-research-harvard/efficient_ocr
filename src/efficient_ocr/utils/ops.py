@@ -325,3 +325,23 @@ def yolov5_non_max_suppression(
             output[xi] = output[xi].to(device)
 
     return output
+
+def make_coco_from_effocr_result(imgs, result):
+    '''
+    Takes in an effocr result in the format:
+        { bbox_idx: {
+                        line_idx: {
+                            'words': [(word_img, (y0, x0, y1, x1)), ...],
+                            'chars': [(char_img, (y0, x0, y1, x1)), ...],
+                            'overlaps': [[char_idx, char_idx, ...], ...],
+                            'para_end': bool,
+                            'final_puncs': [word_end, ...],
+                            'word_preds': [word_pred, ...]
+                        },
+                        ...
+                    },
+                    ...
+        }}
+
+    And produces a coco format annotation
+    '''

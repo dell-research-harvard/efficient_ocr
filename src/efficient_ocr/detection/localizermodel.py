@@ -237,12 +237,8 @@ class LocalizerModel:
         yaml_loc = create_yolo_yaml(data_locs, 'localizer')
 
         yolov5.train(imgsz=self.config['input_shape'][0], data=yaml_loc, weights=self.config['localizer_model_path'], epochs=self.config['epochs'], 
-                     batch_size=self.config['batch_size'], device=self.config['device'], exist_ok=True, name = self.config['localizer_training_name'], exist_ok=True)
+                     batch_size=self.config['batch_size'], device=self.config['device'], exist_ok=True, name = self.config['localizer_training_name'])
         
 
         self.config['localizer_model_path'] = os.path.join(self.config['localizer_training_name'], 'weights', 'best.pt')
         self.initialize_model()
-
-
-
-

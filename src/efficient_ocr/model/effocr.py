@@ -7,6 +7,13 @@ import cv2
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
 from ..recognition import Recognizer, infer_last_chars, infer_words, infer_chars
 from ..detection import LineModel, LocalizerModel # , word_model, char_model
+from ..utils import make_coco_from_effocr_result
+
+class EffOCRResult:
+
+    def __init__(self, full_text, result):
+        self.text = full_text
+        self.full_result = result
 
 class EffOCR:
 
@@ -51,7 +58,15 @@ class EffOCR:
         return imgs
     
     def _postprocess(self, results, **kwargs):
-        return results
+        full_results = [None] * len(results)
+        for bbox_idx in results.keys():
+            full_text = '\n'.join([' '.join(results[bbox_idx][i]['word_preds']) for i in range(len(results[bbox_idx]))])
+            full_results[bbox_idx] = EffOCRResult(full_text, results[bbox_idx])
+
+        if len(full_results) == 1:
+            full_results = full_results[0]
+
+        return full_results
 
     def train(self, target = None, **kwargs):
         
@@ -86,7 +101,7 @@ class EffOCR:
 
     
     ### TOM
-    def infer(self, imgs, **kwargs):
+    def infer(self, imgs, make_coco_annotations=None, **kwargs):
         '''
         Inference pipeline has five steps:
         1. Loading and formatting images
@@ -222,6 +237,9 @@ class EffOCR:
         # TBD what we do for postprocessing (likely will be combining all line predictions within a bounding box into a single text, then returning those texts as a list)
         # Passes through for now. 
         final_results = self._postprocess(char_results, **kwargs)
+
+        if make_coco_annotations is not None:
+            make_coco_from_effocr_result(char_results, imgs, save_path=make_coco_annotations if isinstance(make_coco_annotations, str) else "./data/coco_annotations.json")
 
         return final_results
     

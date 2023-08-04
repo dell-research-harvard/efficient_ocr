@@ -334,7 +334,7 @@ COCO_TEMPLATE = {'images': [],
 
 ANNOTATION_TEMPLATE = {'segmentation': [], 'area': None, 'bbox': [], 'iscrowd': 0, 'image_id': None, 'category_id': None, 'id': None}
 
-def make_coco_from_effocr_result(imgs, result, save_path = None):
+def make_coco_from_effocr_result(result, imgs, save_path = None):
     '''
     Takes in an effocr result in the format:
         { bbox_idx: {
@@ -357,8 +357,8 @@ def make_coco_from_effocr_result(imgs, result, save_path = None):
     coco = copy.deepcopy(COCO_TEMPLATE)
 
     for i, img in enumerate(imgs):
-        cv2.imwrite(f'.data/images/{i}.png', img)
-        coco['images'].append({'id': i, 'file_name': f'{i}.png', 'height': img.shape[0], 'width': img['image'].shape[1]})
+        cv2.imwrite(f'./data/images/{i}.png', img)
+        coco['images'].append({'id': i, 'file_name': f'{i}.png', 'height': img.shape[0], 'width': img.shape[1]})
 
     for img in coco['images']:
         for line_idx in result[img['id']].keys():
@@ -372,6 +372,7 @@ def make_coco_from_effocr_result(imgs, result, save_path = None):
             line_anno['segmentation'] = [[line_x0, line_y0, line_x1, line_y0, line_x1, line_y1, line_x0, line_y1]]
             line_text = ' '.join(result[img['id']][line_idx]['word_preds'])
             line_anno['text'] = line_text
+            line_anno['area'] = (line_x1 - line_x0) * (line_y1 - line_y0)
             line_text = line_text.replace(' ', '')
             coco['annotations'].append(line_anno)
 
@@ -386,6 +387,7 @@ def make_coco_from_effocr_result(imgs, result, save_path = None):
                 word_anno['bbox'] = [x0, y0, x1 - x0, y1 - y0]
                 word_anno['segmentation'] = [[x0, y0, x1, y0, x1, y1, x0, y1]]
                 word_anno['text'] = result[img['id']][line_idx]['word_preds'][i]
+                word_anno['area'] = (x1 - x0) * (y1 - y0)
                 coco['annotations'].append(word_anno)
 
             for i, char in enumerate(result[img['id']][line_idx]['chars']):
@@ -398,6 +400,7 @@ def make_coco_from_effocr_result(imgs, result, save_path = None):
                 y0 += line_y0; x0 += line_x0; y1 += line_y0; x1 += line_x0
                 char_anno['bbox'] = [x0, y0, x1 - x0, y1 - y0]
                 char_anno['segmentation'] = [[x0, y0, x1, y0, x1, y1, x0, y1]]
+                char_anno['area'] = (x1 - x0) * (y1 - y0)
                 try:
                     char_anno['text'] = line_text[i]
                 except IndexError:
@@ -407,7 +410,7 @@ def make_coco_from_effocr_result(imgs, result, save_path = None):
 
     if save_path is not None:
         with open(save_path, 'w') as f:
-            json.dump(coco, f)
+            json.dump(coco, f, indent=4)
 
 
     

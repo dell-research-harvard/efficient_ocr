@@ -166,8 +166,9 @@ cython_debug/
 # ONNX Models
 *.onnx
 
-# models
+# models and data
 models/
+data/
 
 # Some test fixtures
 tests/fixtures/lines/

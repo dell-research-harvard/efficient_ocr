@@ -8,7 +8,7 @@ import cv2
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
 from ..recognition import Recognizer, infer_last_chars, infer_words, infer_chars
 from ..detection import LineModel, LocalizerModel # , word_model, char_model
-from ..utils import make_coco_from_effocr_result
+from ..utils import make_coco_from_effocr_result, visualize_effocr_result
 
 class EffOCRResult:
 
@@ -59,8 +59,9 @@ class EffOCR:
         return imgs
     
     def _postprocess(self, results, **kwargs):
-        full_results = [None] * len(results)
+        full_results = [None] * len(results.keys())
         for bbox_idx in results.keys():
+            print(bbox_idx)
             full_text = '\n'.join([' '.join(results[bbox_idx][i]['word_preds']) for i in range(len(results[bbox_idx]))])
             full_results[bbox_idx] = EffOCRResult(full_text, results[bbox_idx])
 
@@ -76,14 +77,14 @@ class EffOCR:
             raise ValueError('target must be a single training procedure or a list of training procedures')
 
         for t in target:
-            if t not in self.TRAINING_FUNCS:
-                raise ValueError('target must be one of {}'.format(self.TRAINING_FUNCS.keys()))
+            if t not in self.training_funcs.keys():
+                raise ValueError('target must be one of {}'.format(self.training_funcs.keys()))
             else:
                 self.training_funcs[t](**kwargs)
 
     ### TOM
     def _train_line(self, **kwargs):
-        self.line_model = train_line(self.line_model, self.data_json, self.config, **kwargs)
+        self.line_model.train(self.data_json, **kwargs)
 
     ### TOM (and Jake)
     def _train_localizer(self, **kwargs):
@@ -99,7 +100,7 @@ class EffOCR:
 
     
     ### TOM
-    def infer(self, imgs, make_coco_annotations=None, visualize=None, **kwargs):
+    def infer(self, imgs, make_coco_annotations=None, visualize=None, save_crops = None, **kwargs):
         '''
         Inference pipeline has five steps:
         1. Loading and formatting images
@@ -118,16 +119,16 @@ class EffOCR:
 
             TODO:
             visualize:
-                None: 
-                save:
-                pyplot:
+                None: Do not visualize
+                save: Visualize in saved images
+                display: Visualize in a window
 
             TODO:
             save_crops:
-                None:
-                line:
-                word:
-                char:
+                None: Do not save
+                line: Save crops of lines
+                word: Save crops of words
+                char: Save crops of characters
         '''
         
         '''
@@ -150,7 +151,7 @@ class EffOCR:
         elif not all([isinstance(img, str) for img in imgs]) or not all([isinstance(img, np.ndarray) for img in imgs]):
             raise ValueError('imgs must be a single image path/numpy array or a list of image paths/numpy arrays')
         
-        imgs = self._load_and_format_images(imgs)
+        imgs = self._load_and_format_images(imgs)            
 
         '''
         Line Detection:
@@ -180,7 +181,6 @@ class EffOCR:
                 }}
         '''
         localizer_results = self.localizer_model(line_results, **kwargs) # Passes back detections and cropped images
-        
         
         '''
         Last character recognition:
@@ -274,8 +274,13 @@ class EffOCR:
                 text: the full predicted text
                 preds: the full predictions dictionary, as described above
         '''
-        if make_coco_annotations is not None:
+        if make_coco_annotations is not None or visualize is not None or save_crops is not None:
             make_coco_from_effocr_result(final_results, imgs, save_path=make_coco_annotations if isinstance(make_coco_annotations, str) else "./data/coco_annotations.json")
+
+        if visualize is not None:
+            visualize_effocr_result(imgs, 
+                                    annotations_path = make_coco_annotations if isinstance(make_coco_annotations, str) else "./data/coco_annotations.json",
+                                    save_path=visualize if isinstance(visualize, str) else "./data/visualized_effocr_result.jpg")
 
 
         return final_results

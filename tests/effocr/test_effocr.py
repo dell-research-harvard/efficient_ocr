@@ -12,7 +12,7 @@ def test_effocr_single():
     effocr = EffOCR(data_json, config_json, pretrained='en_locca')
     results = effocr.infer(r'.\tests\fixtures\test_locca_image.jpg', make_coco_annotations=True)
 
-    assert results.text.startswith('The tug boat')
+    assert results[0].text.startswith('The tug boat')
 
 def test_effocr_dir():
     data_json = r'.\data\coco_ex.json'

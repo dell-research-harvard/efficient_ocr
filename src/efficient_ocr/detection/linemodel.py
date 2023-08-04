@@ -11,6 +11,7 @@ import torchvision
 import cv2
 from math import floor, ceil
 import yolov5
+from yolov5 import train
 from collections import defaultdict
 
 from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, get_onnx_input_name, initialize_onnx_model
@@ -29,6 +30,9 @@ DEFAULT_LINE_CONFIG = { 'line_model_path': './models/yolo/line_model.pt',
                         'visualize': None,
                         'num_cores': None,
                         'max_det': 200}
+
+TRAINING_REQUIRED_ARGS = ['epochs', 'batch_size', 'line_training_name', 'device']
+
 
 class LineModel:
     """
@@ -82,7 +86,6 @@ class LineModel:
         """
         if self.config['model_backend'] == 'yolo':
             self.model = yolov5.load(self.config['line_model_path'], device='cpu')
-            print(type(self.model))
             self.model.conf = self.config['conf_thresh']  # NMS confidence threshold
             self.model.iou = self.config['iou_thresh']  # NMS IoU threshold
             self.model.agnostic = False  # NMS class-agnostic
@@ -109,7 +112,7 @@ class LineModel:
                     num_img_crops.append(len(crops))
                     img_shapes.extend([crop.shape for crop in crops])
 
-                imgs = [self.format_line_img(img) for img in imgs]
+                imgs = [self.format_line_img(crop) for crop in all_crops]
             else:
                 raise ValueError('Invalid combination of input types in Line Detection list! Must be all np.ndarray')
         else:
@@ -141,9 +144,10 @@ class LineModel:
         start = 0
         final_preds = []
         for idxs in num_img_crops:
-            preds = self.adjust_line_preds(preds[start:start+idxs], imgs[start:start+idxs], img_shapes[start:start+idxs])
-            final_preds.append(self.readjust_line_predictions(preds, imgs[start].shape[1]))
+            adjusted_preds = self.adjust_line_preds(preds[start:start+idxs], imgs[start:start+idxs], img_shapes[start:start+idxs])
+            final_preds.append(self.readjust_line_predictions(adjusted_preds, imgs[start].shape[1]))
             start += idxs
+
 
         line_results = defaultdict(list)
         for i, final_pred in enumerate(final_preds):
@@ -155,7 +159,7 @@ class LineModel:
 
                 # Line crops becomes a list of tuples (bbox_id, line_crop [the image itself], line_proj_crop [the coordinates of the line in the layout image])
                 line_results[i].append((np.array(line_crop).astype(np.float32), (y0, x0, y1, x1)))
-                            
+
         return line_results
 
 
@@ -242,19 +246,19 @@ class LineModel:
         return im
 
     def get_crops_from_layout_image(self, image):
-        im_width, im_height = image.shape[0], image.shape[1]
+        im_width, im_height = image.shape[1], image.shape[0]
         if im_height <= im_width * self.config['min_seg_ratio']:
             return [image]
         else:
             y0 = 0
-            y1 = im_width * self.min_seg_ratio
+            y1 = im_width * self.config['min_seg_ratio']
             crops = []
             while y1 <= im_height:
-                crops.append(image.crop((0, y0, im_width, y1)))
-                y0 += int(im_width * self.min_seg_ratio * 0.75) # .75 factor ensures there is overlap between crops
-                y1 += int(im_width * self.min_seg_ration * 0.75)
+                crops.append(image[y0:y1, 0:im_width])
+                y0 += int(im_width * self.config['min_seg_ratio'] * 0.75) # .75 factor ensures there is overlap between crops
+                y1 += int(im_width * self.config['min_seg_ratio'] * 0.75)
             
-            crops.append(image.crop((0, y0, im_width, im_height)))
+            crops.append(image[y0:im_height, 0:im_width])
             return crops
 
     # TODO: Train
@@ -262,15 +266,22 @@ class LineModel:
         if not self.config['model_backend'] == 'yolo':
             raise NotImplementedError('Training is only implemented for yolo backend')
         
+        for key, val in kwargs.items():
+            self.config[key] = val
+
+        for key in TRAINING_REQUIRED_ARGS:
+            if key not in self.config.keys():
+                raise ValueError(f'Missing required argument {key} for training!')
+            
         # Create yolo training data from coco
         data_path = create_yolo_training_data(training_data, 'line')
 
         # Create yaml with training data
         yaml_loc = create_yolo_yaml(data_path, 'line')
 
-        yolov5.train(imgsz=self.config['input_shape'][0], data=yaml_loc, weights=self.config['localizer_model_path'], epochs=self.config['epochs'], 
-                     batch_size=self.config['batch_size'], device=self.config['device'], exist_ok=True, name = self.config['localizer_training_name'])
+        train.run(imgsz=self.config['input_shape'][0], data=os.path.join(os.getcwd(), yaml_loc), weights=os.path.join(os.getcwd(), self.config['line_model_path']), epochs=self.config['epochs'], 
+                     batch_size=self.config['batch_size'], device=self.config['device'], exist_ok=True, name = self.config['line_training_name'])
         
 
-        self.config['localizer_model_path'] = os.path.join(self.config['localizer_training_name'], 'weights', 'best.pt')
+        self.config['line_model_path'] = os.path.join('./runs/train/', self.config['line_training_name'], 'weights', 'best.pt')
         self.initialize_model()

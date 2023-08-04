@@ -173,3 +173,7 @@ data/
 # Some test fixtures
 tests/fixtures/lines/
 tests/fixtures/localizer/
+
+# yolo results
+runs/
+*.png

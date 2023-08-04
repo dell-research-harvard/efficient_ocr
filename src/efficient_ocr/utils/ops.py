@@ -5,6 +5,7 @@ import torchvision
 import copy
 import numpy as np
 import cv2
+import os
 import json
 
 DEFAULT_MEAN = np.array([123.675, 116.28, 103.53], dtype=np.float32)
@@ -361,22 +362,22 @@ def make_coco_from_effocr_result(result, imgs, save_path = None):
         coco['images'].append({'id': i, 'file_name': f'{i}.png', 'height': img.shape[0], 'width': img.shape[1], 'text': result[i].text})
 
     for img in coco['images']:
-        for line_idx in result[img['id']].keys():
+        for line_idx in result[img['id']].preds.keys():
             line_anno = copy.deepcopy(ANNOTATION_TEMPLATE)
             line_anno['image_id'] = img['id']
             line_anno['category_id'] = 2
             line_anno['id'] = len(coco['annotations'])
 
-            line_y0, line_x0, line_y1, line_x1 = result[img['id']][line_idx]['bbox']
+            line_y0, line_x0, line_y1, line_x1 = result[img['id']].preds[line_idx]['bbox']
             line_anno['bbox'] = [line_x0, line_y0, line_x1 - line_x0, line_y1 - line_y0]
             line_anno['segmentation'] = [[line_x0, line_y0, line_x1, line_y0, line_x1, line_y1, line_x0, line_y1]]
-            line_text = ' '.join(result[img['id']][line_idx]['word_preds'])
+            line_text = ' '.join(result[img['id']].preds[line_idx]['word_preds'])
             line_anno['text'] = line_text
             line_anno['area'] = (line_x1 - line_x0) * (line_y1 - line_y0)
             line_text = line_text.replace(' ', '')
             coco['annotations'].append(line_anno)
 
-            for i, word in enumerate(result[img['id']][line_idx]['words']):
+            for i, word in enumerate(result[img['id']].preds[line_idx]['words']):
                 word_anno = copy.deepcopy(ANNOTATION_TEMPLATE)
                 word_anno['image_id'] = img['id']
                 word_anno['category_id'] = 1
@@ -386,11 +387,11 @@ def make_coco_from_effocr_result(result, imgs, save_path = None):
                 y0 += line_y0; x0 += line_x0; y1 += line_y0; x1 += line_x0
                 word_anno['bbox'] = [x0, y0, x1 - x0, y1 - y0]
                 word_anno['segmentation'] = [[x0, y0, x1, y0, x1, y1, x0, y1]]
-                word_anno['text'] = result[img['id']][line_idx]['word_preds'][i]
+                word_anno['text'] = result[img['id']].preds[line_idx]['word_preds'][i]
                 word_anno['area'] = (x1 - x0) * (y1 - y0)
                 coco['annotations'].append(word_anno)
 
-            for i, char in enumerate(result[img['id']][line_idx]['chars']):
+            for i, char in enumerate(result[img['id']].preds[line_idx]['chars']):
                 char_anno = copy.deepcopy(ANNOTATION_TEMPLATE)
                 char_anno['image_id'] = img['id']
                 char_anno['category_id'] = 0
@@ -413,5 +414,69 @@ def make_coco_from_effocr_result(result, imgs, save_path = None):
             json.dump(coco, f, indent=4)
 
 
-    
+def visualize_effocr_result(imgs, annotations_path, save_path):
+    with open(annotations_path, 'r') as infile:
+        coco = json.load(infile)
 
+    for img_idx, img in enumerate(imgs):
+        img_coco = coco['images'][img_idx]
+
+        # Create a blank white canvas with height and width 3x the original image's
+        canvas = np.zeros((int(img_coco['height'] * 2.5), int(img_coco['width'] * 3), 3), dtype=np.uint8)
+        canvas.fill(255)
+
+        # Paste the image into the canvas at .5x image height and .5x image width
+        canvas[img_coco['height'] // 4 :img_coco['height'] // 4 + img_coco['height'], img_coco['width'] // 3:img_coco['width'] // 3 + img_coco['width']] = img
+
+        cat_mapping = {cat['name']: cat['id'] for cat in coco['categories']}
+
+        # Create a blank canvas for the line texts, the same size as the image
+        text_canvas = np.zeros((img_coco['height'], img_coco['width'], 3), dtype=np.uint8)
+        text_canvas.fill(255)
+
+        # Assemble a list of all the line annotations associated with this image
+        line_annos = [anno for anno in coco['annotations'] if anno['image_id'] == img_coco['id'] and anno['category_id'] == cat_mapping['line']]
+
+        # Sort the line annotations by y coordinate
+        line_annos.sort(key=lambda x: x['bbox'][1])
+
+        # For each line annotation, paste the text into the text at the y location of the line on the text_canvas
+        for line_anno in line_annos:
+            line_y0, line_x0, line_y1, line_x1 = line_anno['bbox']
+            line_text = line_anno['text']
+            cv2.putText(text_canvas, line_text, (0, line_x0 + line_x1), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 5)
+
+        # Paste the text_canvas into the main canvas, with the top left corner at (.5x image height, 2x image width))
+        # This is so that the text is to the right of the image, with half an image width between text and image
+        canvas[img_coco['height'] // 4:img_coco['height'] // 4 + img_coco['height'], int(img_coco['width'] * (5/3)):int(img_coco['width'] * (5/3)) + img_coco['width']] = text_canvas
+        
+        # Create three copies of the image, each one with bounding boxes annotations from lines, words, and characters
+        line_canvas = copy.deepcopy(img)
+        word_canvas = copy.deepcopy(img)
+        char_canvas = copy.deepcopy(img)
+
+        for anno in coco['annotations']:
+            if anno['image_id'] == img_coco['id']:
+                x0, y0, x1, y1 = anno['bbox']
+                if anno['category_id'] == cat_mapping['line']:
+                    cv2.rectangle(line_canvas, (x0, y0), (x0 + x1, y0 + y1), (0, 0, 255), 2)
+                elif anno['category_id'] == cat_mapping['word']:
+                    cv2.rectangle(word_canvas, (x0, y0), (x0 + x1, y0 + y1), (0, 255, ), 1)
+                elif anno['category_id'] == cat_mapping['char']:
+                    cv2.rectangle(char_canvas, (x0, y0), (x0 + x1, y0 + y1), (255, 0, 0), 1)
+
+        # Paste the three canvases into the main canvas, with the top height at (1.5 image height) and top corners evenly spaced, starting at .5 image width
+        # Scale down all three images to 2/3 of their original size
+        line_canvas = cv2.resize(line_canvas, (2 * img_coco['width'] // 3, 2 * img_coco['height'] // 3))
+        word_canvas = cv2.resize(word_canvas, (2 * img_coco['width'] // 3, 2 * img_coco['height'] // 3))
+        char_canvas = cv2.resize(char_canvas, (2 * img_coco['width'] // 3, 2 * img_coco['height'] // 3))
+        y_top = int(1.5 * img_coco['height'])
+        x_left = int(.25 * img_coco['width'])
+        canvas[y_top:y_top + line_canvas.shape[0], x_left : x_left + line_canvas.shape[1]] = line_canvas
+        x_left = int(1.166 * img_coco['width'])
+        canvas[y_top:y_top + word_canvas.shape[0], x_left : x_left + word_canvas.shape[1]] = word_canvas
+        x_left = int(2.083 * img_coco['width'])
+        canvas[y_top:y_top + char_canvas.shape[0], x_left : x_left + char_canvas.shape[1]] = char_canvas
+
+        # Save the canvas to the save_path
+        cv2.imwrite(os.path.join(save_path, str(img_idx) + '.png'), canvas)

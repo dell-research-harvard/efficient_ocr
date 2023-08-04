@@ -20,3 +20,4 @@ src/efficient_ocr/utils/onnx.py
 src/efficient_ocr/utils/ops.py
 src/efficient_ocr/utils/text.py
 src/efficient_ocr/utils/transforms.py
+src/efficient_ocr/utils/yolo.py

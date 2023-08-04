@@ -1,4 +1,4 @@
-from .ops import yolov8_non_max_suppression, yolov5_non_max_suppression, letterbox, get_onnx_input_name, create_batches, make_coco_from_effocr_result
+from .ops import yolov8_non_max_suppression, yolov5_non_max_suppression, letterbox, get_onnx_input_name, create_batches, make_coco_from_effocr_result, visualize_effocr_result
 from .ops import DEFAULT_MEAN, DEFAULT_STD
 from .onnx import initialize_onnx_model
 from .text import en_preprocess

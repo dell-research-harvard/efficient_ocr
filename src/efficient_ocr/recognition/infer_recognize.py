@@ -41,7 +41,10 @@ def infer_chars(word_results, recognizer):
                     word_results[bbox_idx][line_idx]['word_preds'][i] += p
             
             if word_results[bbox_idx][line_idx]['para_end']:
-                word_results[bbox_idx][line_idx]['word_preds'][-1] += '\n'
+                if len(word_results[bbox_idx][line_idx]['word_preds']) > 0:
+                    word_results[bbox_idx][line_idx]['word_preds'][-1] += '\n'
+                else:
+                    word_results[bbox_idx][line_idx]['word_preds'].append('\n')
 
     return word_results
 
@@ -73,7 +76,7 @@ def infer_last_chars(localizer_results, recognizer):
 
     # Assemble all the last chars from the results dictionary into a list
     last_chars = []
-    no_overlaps_words = []
+
     for bbox_idx in localizer_results.keys():
         for line_idx in localizer_results[bbox_idx].keys():
             for i, overlaps in enumerate(localizer_results[bbox_idx][line_idx]['overlaps']):

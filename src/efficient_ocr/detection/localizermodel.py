@@ -6,6 +6,7 @@ Class for EffOCR Localization Model
 import os
 import json
 import yolov5
+from yolov5 import train
 import numpy as np
 from collections import defaultdict
 import threading
@@ -29,6 +30,8 @@ DEFAULT_LOCALIZER_CONFIG = { 'localizer_model_path': './models/yolo/localizer_mo
                         'max_det': 200,
                         'language': 'en',
                         'vertiacal': False}
+
+TRAINING_REQUIRED_ARGS = ['epochs', 'batch_size', 'localizer_training_name', 'device']
 
 def iteration(model, input):
     output = model(input)
@@ -164,7 +167,7 @@ class LocalizerModel:
                 if word_bboxes.shape[0] > 0:
                     char_bboxes, word_bboxes, word_char_overlap = en_preprocess(char_bboxes, word_bboxes)
                 else:
-                    word_char_overlap = None
+                    word_char_overlap = []
 
                 if len(char_bboxes) > 0:
                     l_dist, r_dist = char_bboxes[0][0].item(), char_bboxes[-1][-2].item()
@@ -232,13 +235,21 @@ class LocalizerModel:
         if self.config['model_backend'] != 'yolo':
             raise NotImplementedError('Only YOLO model backend is currently supported for training!')
         
+        for key, val in kwargs.items():
+            self.config[key] = val
+
+        for key in TRAINING_REQUIRED_ARGS:
+            if key not in self.config.keys():
+                raise ValueError(f'Missing required argument {key} for training!')
+
         # Create yolo training data from coco
         data_locs = create_yolo_training_data(training_data, 'localizer')
 
         # Create yaml with training data
         yaml_loc = create_yolo_yaml(data_locs, 'localizer')
 
-        yolov5.train(imgsz=self.config['input_shape'][0], data=yaml_loc, weights=self.config['localizer_model_path'], epochs=self.config['epochs'], 
+
+        train.run(imgsz=self.config['input_shape'][0], data=yaml_loc, weights=self.config['localizer_model_path'], epochs=self.config['epochs'], 
                      batch_size=self.config['batch_size'], device=self.config['device'], exist_ok=True, name = self.config['localizer_training_name'])
         
 

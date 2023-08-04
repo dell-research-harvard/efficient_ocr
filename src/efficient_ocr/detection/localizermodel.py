@@ -15,6 +15,7 @@ import multiprocessing
 
 from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, en_preprocess, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
+from ..utils import create_yolo_training_data, create_yolo_yaml
 
 DEFAULT_LOCALIZER_CONFIG = { 'localizer_model_path': './models/yolo/localizer_model.pt',
                         'iou_thresh': 0.10,
@@ -149,7 +150,7 @@ class LocalizerModel:
             thread.join()
 
         # Get the results from the output queue
-        side_dists  = {bbox_idx: {'l_dists': [], 'r_dists': []} for bbox_idx in line_results.keys()}
+        side_dists  = {bbox_idx: {'l_dists': [None] * len(line_results[bbox_idx]), 'r_dists': [None] * len(line_results[bbox_idx])} for bbox_idx in line_results.keys()}
         while not output_queue.empty():
             bbox_idx, im_idx, preds = output_queue.get()
             im = line_results[bbox_idx][im_idx][0]
@@ -165,10 +166,10 @@ class LocalizerModel:
 
                 if len(char_bboxes) > 0:
                     l_dist, r_dist = char_bboxes[0][0].item(), char_bboxes[-1][-2].item()
-                    side_dists[bbox_idx]['l_dists'].append(l_dist) # Store distances for paragraph detection
-                    side_dists[bbox_idx]['r_dists'].append(r_dist)
+                    side_dists[bbox_idx]['l_dists'][im_idx] = l_dist # Store distances for paragraph detection
+                    side_dists[bbox_idx]['r_dists'][im_idx] = r_dist
                 else:
-                    side_dists[bbox_idx]['l_dists'].append(None); side_dists[bbox_idx]['r_dists'].append(None)
+                    side_dists[bbox_idx]['l_dists'][im_idx] = None; side_dists[bbox_idx]['r_dists'][im_idx] = None
             else:
                 raise NotImplementedError('Only English is currently supported!')
             
@@ -190,8 +191,9 @@ class LocalizerModel:
                     # If so, skip the entry
                     continue
                 else:
+                    # Note we go ahead and extend characters to the full height of the line
                     x0, y0, x1, y1 = int(x0.item()), int(y0.item()), int(x1.item()), int(y1.item())
-                    localizer_results[bbox_idx][im_idx]['chars'].append((im[y0:y1, x0:x1, :], (y0, x0, y1, x1)))
+                    localizer_results[bbox_idx][im_idx]['chars'].append((im[:, x0:x1, :], (y0, x0, y1, x1)))
 
             localizer_results[bbox_idx][im_idx]['overlaps'] = word_char_overlap
 
@@ -223,6 +225,24 @@ class LocalizerModel:
                 continue
 
         return localizer_results
+    
+    def train(self, training_data, **kwargs):
+        if self.config['model_backend'] != 'yolo':
+            raise NotImplementedError('Only YOLO is currently supported for training!')
+        
+        # Create yolo training data from coco
+        data_locs = create_yolo_training_data(training_data, 'localizer')
+
+        # Create yaml with training data
+        yaml_loc = create_yolo_yaml(data_locs, 'localizer')
+
+        yolov5.train(imgsz=self.config['input_shape'][0], data=yaml_loc, weights=self.config['localizer_model_path'], epochs=self.config['epochs'], 
+                     batch_size=self.config['batch_size'], device=self.config['device'], exist_ok=True, name = self.config['localizer_training_name'], exist_ok=True)
+        
+
+        self.config['localizer_model_path'] = os.path.join(self.config['localizer_training_name'], 'weights', 'best.pt')
+        self.initialize_model()
+
 
 
 

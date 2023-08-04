@@ -4,10 +4,67 @@ import numpy as np
 END_PUNCTUATION = '.?!,;:"\''
 
 def infer_chars(word_results, recognizer):
-    pass
+    # Assemble all the char crops from the results dictionary into a list
+    char_crops = []
+    for bbox_idx in word_results.keys():
+        for line_idx in word_results[bbox_idx].keys():
+            for i, p in enumerate(word_results[bbox_idx][line_idx]['word_preds']):
+                if p is not None:
+                    continue
+                else:
+                    for overlap in word_results[bbox_idx][line_idx]['overlaps'][i]:
+                        char_crops.append(word_results[bbox_idx][line_idx]['chars'][overlap][0])
 
-def infer_words(last_char_results, recognizer):
-    pass
+    # Get the recognizer results from those chars
+    results = recognizer.run(char_crops)
+    assert len(results) == len(char_crops)
+
+    # Assemble the results back into the word_results dictionary
+    results_idx = 0
+    for bbox_idx in word_results.keys():
+        for line_idx in word_results[bbox_idx].keys():
+            for i, p in enumerate(word_results[bbox_idx][line_idx]['word_preds']):
+                if p is not None:
+                    continue
+                else:
+                    word = ''
+                    for _ in range(len(word_results[bbox_idx][line_idx]['overlaps'][i])):
+                        word += results[results_idx]
+                        results_idx += 1
+                    word_results[bbox_idx][line_idx]['word_preds'][i] = word
+    
+    # Add final punctuation to the end of each word
+    for bbox_idx in word_results.keys():
+        for line_idx in word_results[bbox_idx].keys():
+            for i, p in enumerate(word_results[bbox_idx][line_idx]['final_puncs']):
+                if p is not None:
+                    word_results[bbox_idx][line_idx]['word_preds'][i] += p
+
+    return word_results
+
+def infer_words(last_char_results, recognizer, threshold = 0.83):
+    # Assemble all the word crops from the results dictionary into a list
+    word_crops = []
+    for bbox_idx in last_char_results.keys():
+        for line_idx in last_char_results[bbox_idx].keys():
+            word_crops.extend([last_char_results[bbox_idx][line_idx]['words'][i][0] for i in range(len(last_char_results[bbox_idx][line_idx]['words']))])
+            last_char_results[bbox_idx][line_idx]['word_preds'] = [None] * len(last_char_results[bbox_idx][line_idx]['words'])
+
+    # Get the recognizer results from those chars
+    results = recognizer.run(word_crops, cutoff = threshold)
+    assert len(results) == len(word_crops)
+
+    # Assemble the results back into the last_char_results dictionary
+    results_idx = 0
+    for bbox_idx in last_char_results.keys():
+        for line_idx in last_char_results[bbox_idx].keys():
+            for i in range(len(last_char_results[bbox_idx][line_idx]['word_preds'])):
+                last_char_results[bbox_idx][line_idx]['word_preds'][i] = results[results_idx]
+                results_idx += 1
+
+    return last_char_results
+
+
 
 def infer_last_chars(localizer_results, recognizer):
 
@@ -26,7 +83,7 @@ def infer_last_chars(localizer_results, recognizer):
 
 
     # Get the recognizer results from those chars
-    results = recognizer.infer(last_chars)
+    results = recognizer.run(last_chars)
     assert len(results) == len(last_chars)
 
     # Assemble the results back into the localizer_results dictionary

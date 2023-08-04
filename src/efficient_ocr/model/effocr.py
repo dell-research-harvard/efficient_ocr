@@ -22,7 +22,6 @@ class EffOCR:
             self.data_json = json.load(f)
 
         self.config = self._load_config(config_json)
-        print(self.config)
 
         self.line_model = self._initialize_line()
         self.localizer_model = self._initialize_localizer()
@@ -194,7 +193,7 @@ class EffOCR:
             Regardless of predictions, the word image and bounding boxes stay the same.
 
         '''
-        word_results = infer_words(localizer_results, self.word_model, **kwargs) 
+        word_results = infer_words(last_char_results, self.word_model, **kwargs) 
 
         '''
         Character Recognition:
@@ -224,7 +223,7 @@ class EffOCR:
         # Passes through for now. 
         final_results = self._postprocess(char_results, **kwargs)
 
-        return 
+        return final_results
     
     '''
     Model Initialization Functions

@@ -8,6 +8,7 @@ import numpy as np
 from collections import defaultdict
 from efficient_ocr import EffOCR
 from efficient_ocr.detection import LineModel, LocalizerModel
+from efficient_ocr.recognition import Recognizer, infer_last_chars, infer_words, infer_chars
 
 def draw_rectangles(img, rectangles, color = (0, 255, 0), thickness = 2):
     for rect in rectangles:
@@ -66,6 +67,23 @@ def test_line_det():
         img = line_results[0][im_idx][0].copy()
         words_img = draw_rectangles(img, words, color = (0, 255, 0))
         cv2.imwrite(r'./tests/fixtures/localizer/test_localizer_words_{}.jpg'.format(im_idx), img)
+
+    char_recognizer = Recognizer(config, type='char')
+    last_char_results = infer_last_chars(localizer_results, char_recognizer)
+    assert len(last_char_results[0][0]['words']) == len(last_char_results[0][0]['final_puncs'])
+    assert last_char_results[0][0]['final_puncs'] == [None, None, None, '.', None, None]
+    assert last_char_results[0][9]['final_puncs'] == ['.']
+
+    word_recognizer = Recognizer(config, type='word')
+    word_results = infer_words(last_char_results, word_recognizer)
+    assert len(word_results[0][0]['words']) == len(last_char_results[0][0]['word_preds'])
+    assert word_results[0][0]['word_preds'] == ['The', 'tug', 'boat', 'Alice', 'with', 'Captain']
+    assert word_results[0][1]['word_preds'][0] is None
+
+    char_results = infer_chars(word_results, char_recognizer)
+    assert char_results[0][0]['word_preds'] == ['The', 'tug', 'boat', 'Alice.', 'with', 'Captain']
+    assert char_results[0][1]['word_preds'] == ['Rollie', 'Davis', 'and', 'Harry', 'Raymond', 'on']
+
 
 def test_localizer():
     pass

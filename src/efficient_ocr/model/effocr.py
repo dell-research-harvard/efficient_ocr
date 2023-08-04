@@ -3,6 +3,7 @@ EffOCR Main Class
 '''
 import json
 import numpy as np
+import os
 import cv2
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
 from ..recognition import Recognizer, infer_last_chars, infer_words, infer_chars
@@ -141,7 +142,10 @@ class EffOCR:
                 4. A list of numpy arrays
         '''
         if isinstance(imgs, str):
-            imgs = [imgs]
+            if os.path.isdir(imgs):
+                imgs = [os.path.join(imgs, img) for img in os.listdir(imgs)]
+            elif os.path.isfile(imgs):
+                imgs = [imgs]
         elif isinstance(imgs, np.ndarray):
             imgs = [imgs]
         elif not isinstance(imgs, list):

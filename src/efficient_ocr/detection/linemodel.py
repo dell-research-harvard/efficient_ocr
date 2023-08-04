@@ -263,10 +263,10 @@ class LineModel:
             raise NotImplementedError('Training is only implemented for yolo backend')
         
         # Create yolo training data from coco
-        data_locs = create_yolo_training_data(training_data, 'localizer')
+        data_path = create_yolo_training_data(training_data, 'line')
 
         # Create yaml with training data
-        yaml_loc = create_yolo_yaml(data_locs, 'localizer')
+        yaml_loc = create_yolo_yaml(data_path, 'line')
 
         yolov5.train(imgsz=self.config['input_shape'][0], data=yaml_loc, weights=self.config['localizer_model_path'], epochs=self.config['epochs'], 
                      batch_size=self.config['batch_size'], device=self.config['device'], exist_ok=True, name = self.config['localizer_training_name'])

@@ -101,7 +101,7 @@ class EffOCR:
 
     
     ### TOM
-    def infer(self, imgs, make_coco_annotations=None, **kwargs):
+    def infer(self, imgs, make_coco_annotations=None, visualize=None, **kwargs):
         '''
         Inference pipeline has five steps:
         1. Loading and formatting images
@@ -111,6 +111,25 @@ class EffOCR:
         5. Character Recognition
 
         Each input/output format is defined in the body
+
+        Options:
+            make_coco_annotations:
+                None: no coco annotations are made
+                True: coco annotations are made and saved to a default path
+                str: coco annotations are made and saved to the path specified by the string
+
+            TODO:
+            visualize:
+                None: 
+                save:
+                pyplot:
+
+            TODO:
+            save_crops:
+                None:
+                line:
+                word:
+                char:
         '''
         
         '''
@@ -184,6 +203,7 @@ class EffOCR:
                 If a punctuation mark was detected, all of the characters list, the overlaps object, and the word image and bounding boxes will be adjusted to reflect that detection. 
         '''
 
+        # TODO: skip on language from config
         last_char_results = infer_last_chars(localizer_results, self.char_model, **kwargs) # Passes back detections and cropped images
 
         '''
@@ -211,6 +231,8 @@ class EffOCR:
             Regardless of predictions, the word image and bounding boxes stay the same.
 
         '''
+
+        # TODO: skip on language from config, work with skipped final punctuation step
         word_results = infer_words(last_char_results, self.word_model, **kwargs) 
 
         '''
@@ -236,10 +258,13 @@ class EffOCR:
             Where 'word_preds' is fully filled out. For any word with a None prediction passed in, all overlapping characters have been recognized and combined to create the 
             word prediction. 
         '''
+
+        # TODO: work with skipped word, last character on language from config
         char_results = infer_chars(word_results, self.char_model, **kwargs) # Passes back predidctions
 
         # TBD what we do for postprocessing (likely will be combining all line predictions within a bounding box into a single text, then returning those texts as a list)
         # Passes through for now. 
+        # TODO: Work with various inference combos
         final_results = self._postprocess(char_results, **kwargs)
 
         if make_coco_annotations is not None:

@@ -15,6 +15,8 @@ from collections import defaultdict
 
 from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, get_onnx_input_name, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
+from ..utils import create_yolo_training_data, create_yolo_yaml
+
 
 DEFAULT_LINE_CONFIG = { 'line_model_path': './models/yolo/line_model.pt',
                         'iou_thresh': 0.15,
@@ -254,3 +256,21 @@ class LineModel:
             
             crops.append(image.crop((0, y0, im_width, im_height)))
             return crops
+
+    # TODO: Train
+    def train(self, training_data, **kwargs):
+        if not self.config['model_backend'] == 'yolo':
+            raise NotImplementedError('Training is only implemented for yolo backend')
+        
+        # Create yolo training data from coco
+        data_locs = create_yolo_training_data(training_data, 'localizer')
+
+        # Create yaml with training data
+        yaml_loc = create_yolo_yaml(data_locs, 'localizer')
+
+        yolov5.train(imgsz=self.config['input_shape'][0], data=yaml_loc, weights=self.config['localizer_model_path'], epochs=self.config['epochs'], 
+                     batch_size=self.config['batch_size'], device=self.config['device'], exist_ok=True, name = self.config['localizer_training_name'])
+        
+
+        self.config['localizer_model_path'] = os.path.join(self.config['localizer_training_name'], 'weights', 'best.pt')
+        self.initialize_model()

@@ -230,7 +230,7 @@ class LocalizerModel:
     
     def train(self, training_data, **kwargs):
         if self.config['model_backend'] != 'yolo':
-            raise NotImplementedError('Only YOLO is currently supported for training!')
+            raise NotImplementedError('Only YOLO model backend is currently supported for training!')
         
         # Create yolo training data from coco
         data_locs = create_yolo_training_data(training_data, 'localizer')

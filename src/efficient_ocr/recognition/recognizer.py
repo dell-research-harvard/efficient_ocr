@@ -168,3 +168,9 @@ class Recognizer:
             return outputs
         else:
             return [self.candidates[index] for _, index in distances_and_indices[:total_images]]
+            
+    def train(self, **kwargs):
+        if not self.config['model_backend' + self.suffix] == 'timm':
+            raise NotImplementedError('Training is only supported for timm models')
+
+        # TODO: Call traiing script from /recognizer_training/train.py with approriate args

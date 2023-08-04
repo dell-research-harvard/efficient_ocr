@@ -2,8 +2,10 @@ import torch
 import torch.nn as nn
 import time
 import torchvision
+import copy
 import numpy as np
 import cv2
+import json
 
 DEFAULT_MEAN = np.array([123.675, 116.28, 103.53], dtype=np.float32)
 DEFAULT_STD = np.array([58.395, 57.12, 57.375], dtype=np.float32)
@@ -326,7 +328,13 @@ def yolov5_non_max_suppression(
 
     return output
 
-def make_coco_from_effocr_result(imgs, result):
+COCO_TEMPLATE = {'images': [],
+                 'annotations': [],
+                 'categories': [{'id': 0, 'name': 'char'}, {'id': 1, 'name': 'word'}, {'id': 2, 'name': 'line'}]}
+
+ANNOTATION_TEMPLATE = {'segmentation': [], 'area': None, 'bbox': [], 'iscrowd': 0, 'image_id': None, 'category_id': None, 'id': None}
+
+def make_coco_from_effocr_result(imgs, result, save_path = None):
     '''
     Takes in an effocr result in the format:
         { bbox_idx: {
@@ -335,6 +343,7 @@ def make_coco_from_effocr_result(imgs, result):
                             'chars': [(char_img, (y0, x0, y1, x1)), ...],
                             'overlaps': [[char_idx, char_idx, ...], ...],
                             'para_end': bool,
+                            'bbox': (y0, x0, y1, x1),
                             'final_puncs': [word_end, ...],
                             'word_preds': [word_pred, ...]
                         },
@@ -345,3 +354,61 @@ def make_coco_from_effocr_result(imgs, result):
 
     And produces a coco format annotation
     '''
+    coco = copy.deepcopy(COCO_TEMPLATE)
+
+    for i, img in enumerate(imgs):
+        cv2.imwrite(f'.data/images/{i}.png', img)
+        coco['images'].append({'id': i, 'file_name': f'{i}.png', 'height': img.shape[0], 'width': img['image'].shape[1]})
+
+    for img in coco['images']:
+        for line_idx in result[img['id']].keys():
+            line_anno = copy.deepcopy(ANNOTATION_TEMPLATE)
+            line_anno['image_id'] = img['id']
+            line_anno['category_id'] = 2
+            line_anno['id'] = len(coco['annotations'])
+
+            line_y0, line_x0, line_y1, line_x1 = result[img['id']][line_idx]['bbox']
+            line_anno['bbox'] = [line_x0, line_y0, line_x1 - line_x0, line_y1 - line_y0]
+            line_anno['segmentation'] = [[line_x0, line_y0, line_x1, line_y0, line_x1, line_y1, line_x0, line_y1]]
+            line_text = ' '.join(result[img['id']][line_idx]['word_preds'])
+            line_anno['text'] = line_text
+            line_text = line_text.replace(' ', '')
+            coco['annotations'].append(line_anno)
+
+            for i, word in enumerate(result[img['id']][line_idx]['words']):
+                word_anno = copy.deepcopy(ANNOTATION_TEMPLATE)
+                word_anno['image_id'] = img['id']
+                word_anno['category_id'] = 1
+                word_anno['id'] = len(coco['annotations'])
+
+                y0, x0, y1, x1 = word[1]
+                y0 += line_y0; x0 += line_x0; y1 += line_y0; x1 += line_x0
+                word_anno['bbox'] = [x0, y0, x1 - x0, y1 - y0]
+                word_anno['segmentation'] = [[x0, y0, x1, y0, x1, y1, x0, y1]]
+                word_anno['text'] = result[img['id']][line_idx]['word_preds'][i]
+                coco['annotations'].append(word_anno)
+
+            for i, char in enumerate(result[img['id']][line_idx]['chars']):
+                char_anno = copy.deepcopy(ANNOTATION_TEMPLATE)
+                char_anno['image_id'] = img['id']
+                char_anno['category_id'] = 0
+                char_anno['id'] = len(coco['annotations'])
+
+                y0, x0, y1, x1 = char[1]
+                y0 += line_y0; x0 += line_x0; y1 += line_y0; x1 += line_x0
+                char_anno['bbox'] = [x0, y0, x1 - x0, y1 - y0]
+                char_anno['segmentation'] = [[x0, y0, x1, y0, x1, y1, x0, y1]]
+                try:
+                    char_anno['text'] = line_text[i]
+                except IndexError:
+                    char_anno['text'] = ''
+
+                coco['annotations'].append(char_anno)
+
+    if save_path is not None:
+        with open(save_path, 'w') as f:
+            json.dump(coco, f)
+
+
+    
+

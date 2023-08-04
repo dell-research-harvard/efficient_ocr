@@ -151,7 +151,8 @@ class EffOCR:
                             'words': [(word_img, (y0, x0, y1, x1)), ...],
                             'chars': [(char_img, (y0, x0, y1, x1)), ...],
                             'overlaps': [[char_idx, char_idx, ...], ...],
-                            'para_end': bool
+                            'para_end': bool,
+                            'bbox': (y0, x0, y1, x1)
                         },
                         ...
                     },
@@ -171,6 +172,7 @@ class EffOCR:
                             'chars': [(char_img, (y0, x0, y1, x1)), ...],
                             'overlaps': [[char_idx, char_idx, ...], ...],
                             'para_end': bool,
+                            'bbox': (y0, x0, y1, x1),
                             'final_puncs': [word_end, ...]
                         },
                         ...
@@ -195,6 +197,7 @@ class EffOCR:
                             'chars': [(char_img, (y0, x0, y1, x1)), ...],
                             'overlaps': [[char_idx, char_idx, ...], ...],
                             'para_end': bool,
+                            'bbox': (y0, x0, y1, x1),
                             'final_puncs': [word_end, ...],
                             'word_preds': [word_pred, ...]
                         },
@@ -221,6 +224,7 @@ class EffOCR:
                             'chars': [(char_img, (y0, x0, y1, x1)), ...],
                             'overlaps': [[char_idx, char_idx, ...], ...],
                             'para_end': bool,
+                            'bbox': (y0, x0, y1, x1),
                             'final_puncs': [word_end, ...],
                             'word_preds': [word_pred, ...]
                         },

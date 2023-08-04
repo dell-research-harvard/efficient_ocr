@@ -125,12 +125,14 @@ class LocalizerModel:
         for bbox_idx in line_results.keys():
             # Set up localizer results as a mapping from bounding box index to a dictionary of line indices to a list of localizations
             localizer_results[bbox_idx] = {i: blank_localizer_response() for i in range(len(line_results[bbox_idx]))}
+        
 
         # Set up the input queue
         input_queue = queue.Queue()
         for bbox_idx in line_results.keys():
             for line_idx, line_result in enumerate(line_results[bbox_idx]):
                 input_queue.put((bbox_idx, line_idx, line_result[0]))
+                localizer_results[bbox_idx][line_idx]['bbox'] = line_result[1]
 
         # Set up the output queue
         output_queue = queue.Queue()

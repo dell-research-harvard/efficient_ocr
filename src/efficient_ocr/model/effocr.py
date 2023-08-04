@@ -14,7 +14,7 @@ class EffOCRResult:
 
     def __init__(self, full_text, result):
         self.text = full_text
-        self.full_result = result
+        self.preds = result
 
 class EffOCR:
 
@@ -63,9 +63,6 @@ class EffOCR:
         for bbox_idx in results.keys():
             full_text = '\n'.join([' '.join(results[bbox_idx][i]['word_preds']) for i in range(len(results[bbox_idx]))])
             full_results[bbox_idx] = EffOCRResult(full_text, results[bbox_idx])
-
-        if len(full_results) == 1:
-            full_results = full_results[0]
 
         return full_results
 
@@ -271,8 +268,15 @@ class EffOCR:
         # TODO: Work with various inference combos
         final_results = self._postprocess(char_results, **kwargs)
 
+        '''
+        Output: EffOCRResult or list of EffOCRResults
+            EffOCR Results store:
+                text: the full predicted text
+                preds: the full predictions dictionary, as described above
+        '''
         if make_coco_annotations is not None:
-            make_coco_from_effocr_result(char_results, imgs, save_path=make_coco_annotations if isinstance(make_coco_annotations, str) else "./data/coco_annotations.json")
+            make_coco_from_effocr_result(final_results, imgs, save_path=make_coco_annotations if isinstance(make_coco_annotations, str) else "./data/coco_annotations.json")
+
 
         return final_results
     

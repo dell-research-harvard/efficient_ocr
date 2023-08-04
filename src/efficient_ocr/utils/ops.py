@@ -358,7 +358,7 @@ def make_coco_from_effocr_result(result, imgs, save_path = None):
 
     for i, img in enumerate(imgs):
         cv2.imwrite(f'./data/images/{i}.png', img)
-        coco['images'].append({'id': i, 'file_name': f'{i}.png', 'height': img.shape[0], 'width': img.shape[1]})
+        coco['images'].append({'id': i, 'file_name': f'{i}.png', 'height': img.shape[0], 'width': img.shape[1], 'text': result[i].text})
 
     for img in coco['images']:
         for line_idx in result[img['id']].keys():

@@ -18,7 +18,8 @@ def test_effocr_dir():
     data_json = r'.\data\coco_ex.json'
     config_json = r'.\config\config_ex.json'
     effocr = EffOCR(data_json, config_json, pretrained='en_locca')
-    results = effocr.infer(r'C:\Users\bryan\Documents\NBER\datasets\paragraph_breaks\raw_imgs', make_coco_annotations=True)
+    results = effocr.infer(r'C:\Users\bryan\Documents\NBER\datasets\paragraph_breaks\raw_imgs', make_coco_annotations=r'C:\Users\bryan\Documents\NBER\efficient_ocr\data\coco_annotations_multi.json')
+
 
 
     

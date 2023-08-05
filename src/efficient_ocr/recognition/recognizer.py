@@ -61,18 +61,12 @@ DEFAULT_RECOGNIZER_CONFIG = {
     "render_dict_char": None,
 
     # would be None if want to create new training data from data_json and train on that
-    "training_data_dir_path_word": None,
-    "training_data_dir_path_char": None,
+    "ready_to_go_data_dir_path_word": None,
+    "ready_to_go_data_dir_path_char": None,
 
     # core model object contents, if None to be created through training
-    'pretrained_word': False,
-    'pretrained_char': False,
-    'encoder_path_word': None,
-    'index_path_word': None,
-    'candidates_path_word': None,
-    'encoder_path_char': None,
-    'index_path_char': None,
-    'candidates_path_char': None,
+    'pretrained_model_dir_char': None,
+    'pretrained_model_dir_word': None,
 
     # training hyperparameters
     "batch_size": 128,
@@ -90,7 +84,6 @@ DEFAULT_RECOGNIZER_CONFIG = {
     "hardneg_k": 8,
     "num_passes": 1,
     "expansion_factor": 1,
-    "int_eval_steps": None,
     "default_font_name": "Noto",
     "ascender": True,
     "finetune": False,
@@ -103,6 +96,7 @@ DEFAULT_RECOGNIZER_CONFIG = {
     "lr_schedule": False,
     "char_only_sampler": False,
     "aug_paired": False,
+    "int_eval_steps": None,
 
 }
 
@@ -219,14 +213,16 @@ class Recognizer:
         self.type = type
         self.suffix = '_' + type
 
-        if self.config["pretrained" + self.suffix]:
-            if self.config['encoder_path'+ self.suffix] is None or \
-                self.config['index_path'+ self.suffix] is None or \
-                    self.config['candidates_path'+ self.suffix] is None:
-                raise ValueError('Pretrained model requires encoder_path, index_path, and candidates_path')
-            else:
-                self.initialize_model()
-
+        if self.config['pretrained_model_dir'+self.suffix] is None:
+            self.config['encoder_path'+self.suffix] = None
+            self.config['index_path'+self.suffix] = None
+            self.config['candidates_path'+self.suffix] = None
+        else:
+            self.config['encoder_path'+self.suffix] = os.path.join('pretrained_model_dir'+self.suffix, 'enc_best.pth')
+            self.config['index_path'+self.suffix] = os.path.join('pretrained_model_dir'+self.suffix, 'ref.index')
+            self.config['candidates_path'+self.suffix] = os.path.join('pretrained_model_dir'+self.suffix, 'ref.txt')
+            self.initialize_model()
+                
         self.transform = get_transform(type)
 
 
@@ -297,11 +293,11 @@ class Recognizer:
         Transcriptions are currently being passed along with file names
         """
 
-        if self.config["training_data_dir_path"+self.suffix] is None:
+        if self.config["ready_to_go_data_dir_path"+self.suffix] is None:
 
             # create training data folder
 
-            self.config["training_data_dir_path"+self.suffix] = \
+            self.config["ready_to_go_data_dir_path"+self.suffix] = \
                 os.path.join(self.config["output_dir"], "training_data" + self.suffix)
 
             # open data json in coco format
@@ -348,7 +344,7 @@ class Recognizer:
                 raise ValueError("font_dir_path must be specified if existing training data is not specified")
 
             render_all_synth_in_parallel(
-                self.config["training_data_dir_path"+self.suffix], 
+                self.config["ready_to_go_data_dir_path"+self.suffix], 
                 self.config["font_dir_path"], 
                 self.config["render_dict"+self.suffix], 
                 self.config["ascender"]
@@ -360,12 +356,12 @@ class Recognizer:
             for k, v in self.anno_crop_and_text_dict.items():
                 for anno_img_path in v:
                     assert "PAIRED" in anno_img_path
-                    shutil.copy(anno_img_path, os.path.join(self.config["training_data_dir_path"+self.suffix], k))
-                    self.all_paired_image_paths.append(os.path.join(self.config["training_data_dir_path"+self.suffix], k, anno_img_path))
+                    shutil.copy(anno_img_path, os.path.join(self.config["ready_to_go_data_dir_path"+self.suffix], k))
+                    self.all_paired_image_paths.append(os.path.join(self.config["ready_to_go_data_dir_path"+self.suffix], k, anno_img_path))
 
         else:
 
-            self.all_paired_image_paths = glob(os.path.join(self.config["training_data_dir_path"+self.suffix], "**", "PAIRED*"), recursive=True)
+            self.all_paired_image_paths = glob(os.path.join(self.config["ready_to_go_data_dir_path"+self.suffix], "**", "PAIRED*"), recursive=True)
 
 
     def _train(self, splitseed=99):
@@ -375,8 +371,9 @@ class Recognizer:
         np.random.seed(splitseed)
         np.random.shuffle(self.all_paired_image_paths)
 
-        train_end_idx = len(self.all_paired_image_paths) * self.config["train_val_test_split"][0]
-        val_end_idx = len(self.all_paired_image_paths) * (self.config["train_val_test_split"][0] + self.config["train_val_test_split"][1])
+        train_pct, val_pct, test_pct = self.config["train_val_test_split"]
+        train_end_idx = len(self.all_paired_image_paths) * train_pct
+        val_end_idx = len(self.all_paired_image_paths) * (train_pct + val_pct)
 
         train_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[:train_end_idx]]}
         train_paired_image_json_path = os.path.join(self.config["output_dir"], f"train_paired_image_paths_json{self.suffix}.json")
@@ -409,13 +406,10 @@ class Recognizer:
 
         # init encoder
 
-        if self.config["checkpoint"] is None:
-            if not self.config['timm_model_name' + self.suffix] is None:
-                enc = encoder(self.config['timm_model_name' + self.suffix])
-            else:
-                enc = encoder()
+        if self.config['pretrained_model_dir'+self.suffix] is None:
+            enc = encoder()
         else:
-            enc = encoder.load(self.config["checkpoint"])
+            enc = encoder.load(self.config['encoder_path'+self.suffix])
 
         # data parallelism
 
@@ -433,7 +427,7 @@ class Recognizer:
         train_dataset, val_dataset, test_dataset, \
                     train_loader, val_loader, test_loader, num_batches = \
             create_dataset(
-                self.config["training_data_dir_path"+self.suffix], 
+                self.config["ready_to_go_data_dir_path"+self.suffix], 
                 train_paired_image_json_path,
                 val_paired_image_json_path, 
                 test_paired_image_json_path, 
@@ -454,19 +448,13 @@ class Recognizer:
                 aug_paired=self.config["aug_paired"],
                 expansion_factor=self.config["expansion_factor"],
         )
-        
-        self.train_dataset = train_dataset
-        self.val_dataset = val_dataset
-        self.test_dataset = test_dataset
 
         render_dataset = create_render_dataset(
-            self.config["training_data_dir_path"+self.suffix],
+            self.config["ready_to_go_data_dir_path"+self.suffix],
             train_mode=self.type,
             font_name=self.config["default_font_name"],
             imsize=self.config["imsize"],
         )
-
-        self.render_dataset = render_dataset
 
         # optimizer and loss
 
@@ -476,17 +464,20 @@ class Recognizer:
         loss_func = losses.SupConLoss(temperature = self.config["temp"]) 
 
         # get zero-shot accuracy
+        self.accuracy_calculator = AccuracyCalculator(include = ("precision_at_1",), k = 1)
 
-        accuracy_calculator = AccuracyCalculator(include = ("precision_at_1",), k = 1)
-        self.accuracy_calculator = accuracy_calculator
-
-        if self.config["checkpoint"] is not None:
-            print("Zero-shot accuracy:")
-            best_acc = self.tester_knn(val_dataset, render_dataset, enc, 
-                                  accuracy_calculator, "zs", log=not self.config["wandb_project"] is None)
-            ##Log 
-            if not self.config["wandb_project"] is None:
-                wandb.log({"val/acc": best_acc})
+        print("Zero-shot accuracy:")
+        best_acc = self.tester_knn(
+            val_dataset, 
+            render_dataset, 
+            enc, 
+            split="zs", 
+            log=not self.config["wandb_project"] is None
+        )
+        
+        ##Log 
+        if not self.config["wandb_project"] is None:
+            wandb.log({"val/acc": best_acc})
 
         # set  schedule
 
@@ -494,22 +485,33 @@ class Recognizer:
             scheduler = CosineAnnealingDecWarmRestarts(optimizer, T_0=1000 if num_batches is None else num_batches, 
                                                      T_mult=2, l_dec=0.9) 
         else:
-            scheduler=None
+            scheduler = None
         
         # warm start training
 
         print("Training...")
+
         if not self.config["epoch_viz_dir"] is None: 
             os.makedirs(self.config["epoch_viz_dir"], exist_ok=True)
 
         for epoch in range(self.config["start_epoch"], self.config["num_epochs"]+self.config["start_epoch"]):
-            acc = self.trainer_knn_with_eval(enc, loss_func, device, train_loader, 
-                                      optimizer, epoch, self.config["epoch_viz_dir"], 
-                                      self.config["diff_sizes"], scheduler,
-                                      int_eval_steps=self.config["int_eval_steps"],
-                                      zs_accuracy=best_acc if best_acc != None else 0,
-                                      wandb_log=not self.config["wandb_project"] is None)
-            acc = self.tester_knn(val_dataset, render_dataset, enc, accuracy_calculator, "val",log=not self.config["wandb_project"] is None)
+
+            acc = self.trainer_knn_with_eval(
+                val_dataset, render_dataset,
+                enc, loss_func, device, train_loader, 
+                optimizer, epoch, self.config["epoch_viz_dir"], 
+                self.config["diff_sizes"], scheduler,
+                int_eval_steps=self.config["int_eval_steps"],
+                zs_accuracy=best_acc if best_acc != None else 0,
+                wandb_log=not self.config["wandb_project"] is None
+            )
+            acc = self.tester_knn(
+                val_dataset, 
+                render_dataset, 
+                enc, 
+                split="val",
+                log=not self.config["wandb_project"] is None)
+            
             ##Log
             if not self.config["wandb_project"] is None:
                 wandb.log({"val/acc": acc})
@@ -520,11 +522,13 @@ class Recognizer:
                 self.save_model(self.config["output_dir"], enc, "best", datapara)
                 print("Model and index saved.")
 
-                if scheduler!=None:
+                if not scheduler is None:
                     scheduler.step()
                     ###Log on wandb
                     if not self.config["wandb_project"] is None:
                         wandb.log({"train/lr": scheduler.get_last_lr()[0]})
+
+        ## test with best encoder
 
         del enc
         best_enc = encoder.load(os.path.join(self.config["output_dir"], "enc_best.pth"))
@@ -532,7 +536,7 @@ class Recognizer:
 
         if self.config["test_at_end"]:
             print("Testing on test set...")
-            self.tester_knn(test_dataset, render_dataset, best_enc, accuracy_calculator, "test")
+            self.tester_knn(test_dataset, render_dataset, best_enc, "test")
             print("Test set testing complete.")
 
         # optionally infer hard negatives (turned on by default, highly recommend to facilitate hard negative training)
@@ -540,18 +544,43 @@ class Recognizer:
         if not self.config["hardneg_k"] is None:
             query_paths = [x[0] for x in train_dataset.data if os.path.basename(x[0])]
             print("Number of query paths: ", len(query_paths))
-            query_paths, query_dataset=self.prepare_hn_query_paths(query_paths, train_dataset, paired_hn=True, image_size=self.config["imsize"])
+            query_paths, query_dataset = self.prepare_hn_query_paths(query_paths, train_dataset, paired_hn=True, image_size=self.config["imsize"])
             print(f"Num hard neg paths: {len(query_paths)}")    
             transform = create_paired_transform(self.config["imsize"])
             self.infer_hardneg_dataset(query_dataset, train_dataset if self.config["finetune"] else render_dataset, best_enc, 
                 os.path.join(self.config["output_dir"], "ref.index"), os.path.join(self.config["output_dir"], "hns.txt"), 
                 k=self.config["hardneg_k"])
             
-        # initialize trained model
+        # save results of trained model
 
         self.config['index_path' + self.suffix] = os.path.join(self.config["output_dir"], "ref.index")
         self.config['candidates_path' + self.suffix] = os.path.join(self.config["output_dir"], "ref.txt")
         self.config['encoder_path' + self.suffix] = os.path.join(self.config["output_dir"], "enc_best.pth")
+
+    
+    def tester_knn(self, test_set, ref_set, model, split, log=False):
+
+        model.eval()
+
+        test_embeddings, test_labels = self.get_all_embeddings(test_set, model)
+        test_labels = test_labels.squeeze(1)
+        ref_embeddings, ref_labels = self.get_all_embeddings(ref_set, model)
+        ref_labels = ref_labels.squeeze(1)
+
+        print("Computing accuracy...")
+        accuracies = self.accuracy_calculator.get_accuracy(test_embeddings, 
+            ref_embeddings,
+            test_labels,
+            ref_labels,
+            embeddings_come_from_same_source=False)
+        
+        prec_1 = accuracies["precision_at_1"]
+
+        ##Log the accuracy
+        if log:
+            wandb.log({f"{split}/accuracy": prec_1})
+        print(f"Accuracy on {split} set (Precision@1) = {prec_1}")
+        return prec_1
    
     
     def infer_hardneg_dataset(self, query_dataset, ref_dataset, model, index_path, inf_save_path, k=8):
@@ -641,40 +670,14 @@ class Recognizer:
             for path in query_paths:
                 f.write(f"{path}\n")
 
-        query_dataset = create_hn_query_dataset(self.config["training_data_dir_path"+self.suffix], imsize=image_size,hn_query_list=query_paths)
+        query_dataset = create_hn_query_dataset(self.config["ready_to_go_data_dir_path"+self.suffix], imsize=image_size,hn_query_list=query_paths)
 
         print(f"Num hard neg paths: {len(query_paths)}")    
         return query_paths, query_dataset
 
-    
-    def tester_knn(self, test_set, ref_set, model, accuracy_calculator, split, log=False):
-
-        model.eval()
-
-        test_embeddings, test_labels = self.get_all_embeddings(test_set, model)
-        test_labels = test_labels.squeeze(1)
-        ref_embeddings, ref_labels = self.get_all_embeddings(ref_set, model)
-        ref_labels = ref_labels.squeeze(1)
-
-        print("Computing accuracy...")
-        accuracies = accuracy_calculator.get_accuracy(test_embeddings, 
-            ref_embeddings,
-            test_labels,
-            ref_labels,
-            embeddings_come_from_same_source=False)
-        
-
-        prec_1 = accuracies["precision_at_1"]
-
-        ##Log the accuracy
-        if log:
-            wandb.log({f"{split}/accuracy": prec_1})
-        print(f"Accuracy on {split} set (Precision@1) = {prec_1}")
-        return prec_1
-
 
     def trainer_knn_with_eval(
-            self, model, loss_func, device, 
+            self, val_dataset, render_dataset, model, loss_func, device, 
             train_loader, optimizer, epoch, epochviz=None, 
             diff_sizes=False,scheduler=None,int_eval_steps=None,
             zs_accuracy=0,wandb_log=False):
@@ -704,10 +707,9 @@ class Recognizer:
             if wandb_log:
                 wandb.log({"train/loss": loss.item()})
 
-            if int_eval_steps!=None:
+            if not int_eval_steps is None:
                 if batch_idx % int_eval_steps == 0:
-                    acc = self.tester_knn(self.val_dataset, self.render_dataset, model, 
-                                          self.accuracy_calculator, "val",log=wandb_log)
+                    acc = self.tester_knn(val_dataset, render_dataset, model, "val", log=wandb_log)
                     print("Intermediate accuracy: ",acc)
                     if wandb_log:
                         wandb.log({"val/acc": acc})
@@ -725,7 +727,7 @@ class Recognizer:
             del embeddings
             del loss
             del labels
-            if scheduler!=None:
+            if not scheduler is None:
                 scheduler.step()
                 if wandb_log:
                     wandb.log({"train/lr": scheduler.get_lr()[0]})

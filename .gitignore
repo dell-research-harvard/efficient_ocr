@@ -181,3 +181,6 @@ runs/
 # legacy recognizer dir
 
 **/recognizer_training/
+
+.DS_store
+.DS_Store

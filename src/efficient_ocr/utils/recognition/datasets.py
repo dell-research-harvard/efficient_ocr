@@ -6,7 +6,7 @@ import os
 import json
 
 from .samplers import *
-from .dataset_utils import *
+from .transforms import *
 from datetime import datetime
 from tqdm import tqdm
 
@@ -118,7 +118,7 @@ def create_dataset(
         val_ann_path,
         test_ann_path, 
         batch_size,
-        train_mode="character",
+        train_mode="char",
         hardmined_txt=None, 
         m=4,
         finetune=False,
@@ -145,7 +145,7 @@ def create_dataset(
 
     start_time = datetime.now()
 
-    if train_mode == "character":
+    if train_mode == "char":
 
         dataset = FontImageFolder(
             root_dir, 
@@ -223,12 +223,10 @@ def create_dataset(
 
     #####Flag - Add some checks here in later version to test for overlaps.
 
-
-
     print(f"Len train dataset: {len(train_dataset)}")
     print("Time to create subsets: ", datetime.now() - start_time)
 
-    if train_mode == "character":
+    if train_mode == "char":
         hn_sampler=HardNegativeClassSamplerChar
         print("Using split batch sampler")
     else:
@@ -271,9 +269,9 @@ def create_dataset(
     return train_dataset, val_dataset, test_dataset, train_loader, val_loader, test_loader, train_loader.sampler.nbatches  if (hardmined_txt!=None and train_mode=="word") else None
 
 
-def create_paired_dataset(root_dir,train_mode="character", imsize=224):
+def create_paired_dataset(root_dir,train_mode="char", imsize=224):
 
-    if train_mode == "character":
+    if train_mode == "char":
         paired_transform = render_transform = create_paired_transform_char(imsize)
     else:
         paired_transform = render_transform = create_paired_transform(imsize)
@@ -284,9 +282,9 @@ def create_paired_dataset(root_dir,train_mode="character", imsize=224):
     return paired_dataset
 
 
-def create_render_dataset(root_dir,train_mode="character", imsize=224, font_name=""):
+def create_render_dataset(root_dir,train_mode="char", imsize=224, font_name=""):
 
-    if train_mode == "character":
+    if train_mode == "char":
         paired_transform = render_transform = create_paired_transform_char(imsize)
     else:
         paired_transform = render_transform = create_paired_transform(imsize)    
@@ -298,9 +296,9 @@ def create_render_dataset(root_dir,train_mode="character", imsize=224, font_name
     return render_dataset
 
 
-def create_hn_query_dataset(root_dir,train_mode="character", imsize=224,hn_query_list=[]):
+def create_hn_query_dataset(root_dir,train_mode="char", imsize=224,hn_query_list=[]):
 
-    if train_mode == "character":
+    if train_mode == "char":
         paired_transform = render_transform = create_paired_transform_char(imsize)
     else:
         paired_transform = render_transform = create_paired_transform(imsize) 

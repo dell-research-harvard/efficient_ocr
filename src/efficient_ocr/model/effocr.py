@@ -25,7 +25,6 @@ class EffOCR:
                                 'word_recognition': self._train_word_recognizer,
                                 'char_recognition': self._train_char_recognizer}
         
-        
         with open(data_json, 'r') as f:
             self.data_json = json.load(f)
 
@@ -82,19 +81,15 @@ class EffOCR:
             else:
                 self.training_funcs[t](**kwargs)
 
-    ### TOM
     def _train_line(self, **kwargs):
         self.line_model.train(self.data_json, **kwargs)
 
-    ### TOM (and Jake)
     def _train_localizer(self, **kwargs):
         self.localizer_model.train(self.data_json, **kwargs)
 
-    ### ABHISHEK (and Jake)
     def _train_word_recognizer(self, **kwargs):
         self.word_model.train(self.data_json, self.config, **kwargs)
 
-    ### JAKE
     def _train_char_recognizer(self, **kwargs):
         self.char_model.train(self.data_json, self.config, **kwargs)
 
@@ -301,4 +296,3 @@ class EffOCR:
     def _initialize_char_recognizer(self):
         return Recognizer(self.config, 'char')
     
-

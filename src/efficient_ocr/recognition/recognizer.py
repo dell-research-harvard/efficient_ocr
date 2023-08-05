@@ -12,6 +12,7 @@ import threading
 import json
 import PIL
 import os
+from glob import glob
 
 import torch
 import torch.nn as nn
@@ -35,75 +36,75 @@ from ..utils import get_transform
 
 from ..utils.recognition.synth_crops import render_all_synth_in_parallel
 from ..utils.recognition.datasets import create_dataset, create_render_dataset, create_hn_query_dataset
-from ..utils.recognition.dataset_utils import create_paired_transform, INV_NORMALIZE
+from ..utils.recognition.transforms import create_paired_transform, INV_NORMALIZE
 from ..utils.recognition.custom_schedulers import CosineAnnealingDecWarmRestarts
 from ..utils.recognition.encoders import AutoEncoderFactory
 
 
 DEFAULT_RECOGNIZER_CONFIG = {
 
-    'wandb_project': None,
-    'data_dir': "",
-    'paired_train_anno_img_paths_json': "",
+    # global options
+    'wandb_project': "package_tests",
+    'data_dir': "/mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_datasets/locca/images",
     'train_val_test_split': [0.7, 0.15, 0.15],
+    "font_dir_path": '/mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_font_files',
+    "output_dir": 'effocr_package_test_locca',
+    "hns_txt_path": None,
+    "checkpoint": None,
+    "epoch_viz_dir": None,
 
-    'model_backend_word': 'onnx',
-    'timm_model_name_word': None,
-    'encoder_path_word': './models/word_recognizer/enc_best.onnx',
-    'index_path_word': './models/word_recognizer/ref.index',
-    'candidates_path_word': './models/word_recognizer/ref.txt',
-    "img_save_dir_word": './intermediate_outputs/word_images',
+    # training mode, 'word' or 'char'
+    "train_mode": 'char',
 
-    'model_backend_char': 'onnx',
-    'timm_model_name_char': None,
-    'encoder_path_char': './models/char_recognizer/enc_best.onnx',
-    'index_path_char': './models/char_recognizer/ref.index',
-    'candidates_path_char': './models/char_recognizer/ref.txt',
-    "img_save_dir_char": './intermediate_outputs/word_images',
+    # mode specific options
+    'model_backend_word': 'timm',
+    'model_backend_char': 'timm',
+    'timm_model_name_word': 'mobilenetv3_small_050.lamb_in1k',
+    'timm_model_name_char': 'mobilenetv3_small_050.lamb_in1k',
+    "render_dict_word": '/mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/e2e2e/end-to-end-pipeline/pipeline_egress/silver_dpd/full_wordlist_effocr.txt',
+    "render_dict_char": '/mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_charsets/allchars.txt',
 
-    "crop_dir_path": '',
-    "font_dir_path": '',
-    "word_dict": '',
-    "ascender": True,
-    "train_paired_image_paths_json": '',
-    "val_paired_image_paths_json": '',
-    "test_paired_image_paths_json": '',
-    "train_mode": 'character',
-    "run_name": '',
+    # would be None if want to create new training data from data_json and train on that
+    "training_data_dir_path_word": '/mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/word_level_effocr/fullsym_locc_dict_words_paired_silver/images',
+    "training_data_dir_path_char": '/mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_char_crops/locca',
+
+    # core model object contents, if None to be created through training
+    'encoder_path_word': None,
+    'index_path_word': None,
+    'candidates_path_word': None,
+    'encoder_path_char': None,
+    'index_path_char': None,
+    'candidates_path_char': None,
+
+    # training hyperparameters
     "batch_size": 128,
     "lr": 2e-6,
+    "dec_lr_factor": 0.9,
+    "adamw_beta1": 0.9,
+    "adamw_beta2": 0.999,
     "weight_decay": 5e-4,
     "num_epochs": 5,
     "temp": 0.1,
     "start_epoch": 1,
     "m": 4,
     "imsize": 224,
-    "hns_txt_path": '',
-    "checkpoint": '',
+    "char_trans_version": 4,
+    "hardneg_k": 8,
+    "num_passes": 1,
+    "expansion_factor": 1,
+    "int_eval_steps": None,
+    "default_font_name": "Noto",
+    "ascender": True,
     "finetune": False,
     "pretrain": False,
     "high_blur": False,
     "latin_suggested_augs": True,
-    "char_trans_version": 4,
     "diff_sizes": False,
-    "epoch_viz_dir": '',
-    "infer_hardneg_k": 8,
     "test_at_end": True,
-    "auto_model_hf": None,
-    "auto_model_timm": None,
-    "num_passes": 1,
     "no_aug": False,
     "lr_schedule": False,
-    "k": 8,
-    "dec_lr_factor": 0.9,
-    "adamw_beta1": 0.9,
-    "adamw_beta2": 0.999,
     "char_only_sampler": False,
     "aug_paired": False,
-    "expansion_factor": 1,
-    "int_eval_steps": None,
-    "wandb_log": False,
-    "default_font_name": "Noto",
 
 }
 
@@ -269,7 +270,7 @@ class Recognizer:
         if not self.config['model_backend' + self.suffix] == 'timm':
             raise NotImplementedError('Training is only supported for timm models')
 
-        ## Create training data from input coco
+        ## Create training data from input coco if not already created
         self._get_training_data(data_json)
        
         ## Run training 
@@ -284,98 +285,113 @@ class Recognizer:
         Transcriptions are currently being passed along with file names
         """
 
-        with open(data_json) as f:
-            data_dict = json.load(f)
+        if self.config["training_data_dir_path"+self.suffix] is None:
 
-        cat_catid_dict = {entry["name"]:entry["id"] for entry in data_dict["categories"]}
-        imageid_filename_dict = {x["id"]:x["file_name"] for x in data_dict["images"]}
+            # create trainin data folder
 
-        try:
-            type_catid = cat_catid_dict[self.type]
-        except KeyError:
-            print("The type of the model doesn't have a name that matches a category in the data json!")
-            raise KeyError
-        
-        self.anno_crop_and_text_dict = defaultdict(list)
+            self.config["training_data_dir_path"+self.suffix] = \
+                os.path.join(self.config["output_dir"] + self.suffix, "training_data")
 
-        for anno in data_dict["annotations"]:
-            if anno["category_id"] == type_catid:
-                image_containing_anno_filename = imageid_filename_dict[anno["image_id"]]
-                image_containing_anno_path = os.path.join(self.config["data_dir"], image_containing_anno_filename)
-                anno_text = anno["text"]
-                image_containing_anno = PIL.Image.open(image_containing_anno_path)
-                ax, ay, aw, ah = anno["bbox"] # should be in xywh format in COCO, should do some checking for this
-                anno_crop = image_containing_anno.crop((ax, ay, ax+aw, ay+ah))
-                anno_crop_path = os.path.join(
-                    self.config["img_save_dir" + self.suffix], 
-                    self.encode_path_naming_convention(image_containing_anno_filename, anno_text)
-                )
-                anno_crop.save(anno_crop_path)
-                self.anno_crop_and_text_dict[str_to_ord_str(anno_text)].append(anno_crop_path)
+            # open data json in coco format
+
+            with open(data_json) as f:
+                data_dict = json.load(f)
+
+            # extract important metadata
+
+            cat_catid_dict = {entry["name"]:entry["id"] for entry in data_dict["categories"]}
+            imageid_filename_dict = {x["id"]:x["file_name"] for x in data_dict["images"]}
+
+            try:
+                type_catid = cat_catid_dict[self.type]
+            except KeyError:
+                print("The type of the model doesn't have a name that matches a category in the data json!")
+                raise KeyError
+            
+            # crop annotations and save
+
+            self.anno_crop_and_text_dict = defaultdict(list)
+
+            print("Preparing training data...")
+            for anno in tqdm(data_dict["annotations"]):
+                if anno["category_id"] == type_catid:
+                    image_containing_anno_filename = imageid_filename_dict[anno["image_id"]]
+                    image_containing_anno_path = os.path.join(self.config["data_dir"], image_containing_anno_filename)
+                    anno_text = anno["text"]
+                    image_containing_anno = PIL.Image.open(image_containing_anno_path)
+                    ax, ay, aw, ah = anno["bbox"] # should be in xywh format in COCO, should do some checking for this
+                    anno_crop = image_containing_anno.crop((ax, ay, ax+aw, ay+ah))
+                    anno_crop_path = os.path.join(
+                        os.path.join(self.config["output_dir"], self.type), 
+                        self.encode_path_naming_convention(image_containing_anno_filename, anno_text)
+                    )
+                    anno_crop.save(anno_crop_path)
+                    self.anno_crop_and_text_dict[str_to_ord_str(anno_text)].append(anno_crop_path)
+
+            # create synthetic data
+
+            render_all_synth_in_parallel(
+                self.config["training_data_dir_path"], 
+                self.config["font_dir_path"], 
+                self.config["render_dict"+self.suffix], 
+                self.config["ascender"]
+            )
+
+            # add in paired data
+
+            self.all_paired_image_paths = []
+            for k, v in self.anno_crop_and_text_dict.items():
+                for anno_img_path in v:
+                    assert "PAIRED" in anno_img_path
+                    shutil.copy(anno_img_path, os.path.join(self.config["training_data_dir_path"], k))
+                    self.all_paired_image_paths.append(os.path.join(self.config["training_data_dir_path"], k, anno_img_path))
+
+        else:
+
+            self.all_paired_image_paths = glob(os.path.join(self.config["training_data_dir_path"], "**", "PAIRED*"), recursive=True)
 
 
-    def _train(self, **kwargs):
-
-        # create synthetic data
-
-        render_all_synth_in_parallel(
-            self.config["crop_dir_path"], 
-            self.config["font_dir_path"], 
-            self.config["word_dict"], 
-            self.config["ascender"]
-        )
-
-        # preprocess paired data
-
-        all_paired_image_paths = []
-        for k, v in self.anno_crop_and_text_dict.items():
-            for anno_img_path in v:
-                shutil.copy(anno_img_path, os.path.join(self.config["crop_dir_path"], k))
-                all_paired_image_paths.append(os.path.join(self.config["crop_dir_path"], k, anno_img_path))
+    def _train(self):
 
         # create splits
 
         np.random.seed(99)
-        np.random.shuffle(all_paired_image_paths)
+        np.random.shuffle(self.all_paired_image_paths)
 
-        train_end_idx = len(all_paired_image_paths) * self.config["train_val_test_split"][0]
-        val_end_idx = len(all_paired_image_paths) * (self.config["train_val_test_split"][0] + self.config["train_val_test_split"][1])
+        train_end_idx = len(self.all_paired_image_paths) * self.config["train_val_test_split"][0]
+        val_end_idx = len(self.all_paired_image_paths) * (self.config["train_val_test_split"][0] + self.config["train_val_test_split"][1])
 
-        train_paired_image_paths = {"images": [{"file_name": x} for x in all_paired_image_paths[:train_end_idx]]}
-        with open(self.config["train_paired_image_paths_json"], "w") as f:
+        train_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[:train_end_idx]]}
+        with open(os.path.join(self.config["output_dir"], "train_paired_image_paths_json.json"), "w") as f:
             json.dump(train_paired_image_paths, f)
 
-        val_paired_image_paths = {"images": [{"file_name": x} for x in all_paired_image_paths[train_end_idx:val_end_idx]]}
-        with open(self.config["val_paired_image_paths_json"], "w") as f:
+        val_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[train_end_idx:val_end_idx]]}
+        with open(os.path.join(self.config["output_dir"], "val_paired_image_paths_json.json"), "w") as f:
             json.dump(val_paired_image_paths, f)
 
-        test_paired_image_paths = {"images": [{"file_name": x} for x in all_paired_image_paths[val_end_idx:]]}
-        with open(self.config["test_paired_image_paths_json"], "w") as f:
+        test_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[val_end_idx:]]}
+        with open(os.path.join(self.config["output_dir"], "test_paired_image_paths_json.json"), "w") as f:
             json.dump(test_paired_image_paths, f)
 
         # setup
 
-        if self.config["wandb_log"]:
-            wandb.init(project=self.config["wandb_project"], name=self.config["run_name"])
+        if not self.config["wandb_project"] is None:
+            wandb.init(project=self.config["wandb_project"], name=self.config["output_dir"])
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        os.makedirs(self.config["run_name"], exist_ok=True)
+        os.makedirs(self.config["output_dir"], exist_ok=True)
 
         # load encoder
 
-        if self.config["auto_model_hf"] is None and self.config["auto_model_timm"] is None:
+        if not self.config['timm_model_name' + self.suffix] is None:
+            encoder = AutoEncoderFactory("timm", self.config['timm_model_name' + self.suffix])
+        else:
             raise NotImplementedError
-        elif not self.config["auto_model_timm"] is None:
-            encoder = AutoEncoderFactory("timm", self.config["auto_model_timm"])
-        elif not self.config["auto_model_hf"] is None:
-            encoder = AutoEncoderFactory("hf", self.config["auto_model_hf"])
 
         # init encoder
 
         if self.config["checkpoint"] is None:
-            if not self.config["auto_model_timm"] is None:
-                enc = encoder(self.config["auto_model_timm"])
-            elif not self.config["auto_model_hf"] is None:
-                enc = encoder(self.config["auto_model_hf"])
+            if not self.config['timm_model_name' + self.suffix] is None:
+                enc = encoder(self.config['timm_model_name' + self.suffix])
             else:
                 enc = encoder()
         else:
@@ -397,10 +413,10 @@ class Recognizer:
         train_dataset, val_dataset, test_dataset, \
                     train_loader, val_loader, test_loader, num_batches = \
             create_dataset(
-                self.config["crop_dir_path"], 
-                self.config["train_paired_image_paths_json"],
-                self.config["val_paired_image_paths_json"], 
-                self.config["test_paired_image_paths_json"], 
+                self.config["training_data_dir_path"], 
+                os.path.join(self.config["output_dir"], self.config["train_paired_image_paths_json"]),
+                os.path.join(self.config["output_dir"], self.config["val_paired_image_paths_json"]), 
+                os.path.join(self.config["output_dir"], self.config["test_paired_image_paths_json"]), 
                 self.config["batch_size"],
                 hardmined_txt=self.config["hns_txt_path"], 
                 train_mode=self.config["train_mode"],
@@ -414,7 +430,7 @@ class Recognizer:
                 imsize=self.config["imsize"],
                 num_passes=self.config["num_passes"],
                 no_aug=self.config["no_aug"],
-                k=self.config["k"],
+                k=self.config["hardneg_k"],
                 aug_paired=self.config["aug_paired"],
                 expansion_factor=self.config["expansion_factor"],
         )
@@ -424,7 +440,7 @@ class Recognizer:
         self.test_dataset = test_dataset
 
         render_dataset = create_render_dataset(
-            self.config["crop_dir_path"],
+            self.config["training_data_dir_path"],
             train_mode=self.config["train_mode"],
             font_name=self.config["default_font_name"],
             imsize=self.config["imsize"],
@@ -447,9 +463,9 @@ class Recognizer:
         if self.config["checkpoint"] is not None:
             print("Zero-shot accuracy:")
             best_acc = self.tester_knn(val_dataset, render_dataset, enc, 
-                                  accuracy_calculator, "zs", log=self.config["wandb_log"])
+                                  accuracy_calculator, "zs", log=not self.config["wandb_project"] is None)
             ##Log 
-            if self.config["wandb_log"]:
+            if not self.config["wandb_project"] is None:
                 wandb.log({"val/acc": best_acc})
 
         # set  schedule
@@ -463,34 +479,36 @@ class Recognizer:
         # warm start training
 
         print("Training...")
-        if not self.config["epoch_viz_dir"] is None: os.makedirs(self.config["epoch_viz_dir"], exist_ok=True)
+        if not self.config["epoch_viz_dir"] is None: 
+            os.makedirs(self.config["epoch_viz_dir"], exist_ok=True)
+
         for epoch in range(self.config["start_epoch"], self.config["num_epochs"]+self.config["start_epoch"]):
             acc = self.trainer_knn_with_eval(enc, loss_func, device, train_loader, 
                                       optimizer, epoch, self.config["epoch_viz_dir"], 
                                       self.config["diff_sizes"], scheduler,
                                       int_eval_steps=self.config["int_eval_steps"],
                                       zs_accuracy=best_acc if best_acc != None else 0,
-                                      wandb_log=self.config["wandb_log"])
-            acc = self.tester_knn(val_dataset, render_dataset, enc, accuracy_calculator, "val",log=self.config["wandb_log"])
+                                      wandb_log=not self.config["wandb_project"] is None)
+            acc = self.tester_knn(val_dataset, render_dataset, enc, accuracy_calculator, "val",log=not self.config["wandb_project"] is None)
             ##Log
-            if self.config["wandb_log"]:
+            if not self.config["wandb_project"] is None:
                 wandb.log({"val/acc": acc})
 
             if acc >= best_acc:
                 best_acc = acc
                 print("Saving model and index...")
-                self.save_model(self.config["run_name"], enc, "best", datapara)
+                self.save_model(self.config["output_dir"], enc, "best", datapara)
                 print("Model and index saved.")
 
                 if scheduler!=None:
                     scheduler.step()
                     ###Log on wandb
-                    if self.config["wandb_log"]:
+                    if not self.config["wandb_project"] is None:
                         wandb.log({"train/lr": scheduler.get_last_lr()[0]})
 
         del enc
-        best_enc = encoder.load(os.path.join(self.config["run_name"], "enc_best.pth"))
-        self.save_ref_index(render_dataset, best_enc, self.config["run_name"])
+        best_enc = encoder.load(os.path.join(self.config["output_dir"], "enc_best.pth"))
+        self.save_ref_index(render_dataset, best_enc, self.config["output_dir"])
 
         if self.config["test_at_end"]:
             print("Testing on test set...")
@@ -499,21 +517,21 @@ class Recognizer:
 
         # optionally infer hard negatives (turned on by default, highly recommend to facilitate hard negative training)
 
-        if not self.config["infer_hardneg_k"] is None:
+        if not self.config["hardneg_k"] is None:
             query_paths = [x[0] for x in train_dataset.data if os.path.basename(x[0])]
             print("Number of query paths: ", len(query_paths))
             query_paths, query_dataset=self.prepare_hn_query_paths(query_paths, train_dataset, paired_hn=True, image_size=self.config["imsize"])
             print(f"Num hard neg paths: {len(query_paths)}")    
             transform = create_paired_transform(self.config["imsize"])
             self.infer_hardneg_dataset(query_dataset, train_dataset if self.config["finetune"] else render_dataset, best_enc, 
-                os.path.join(self.config["run_name"], "ref.index"), os.path.join(self.config["run_name"], "hns.txt"), 
-                k=self.config["infer_hardneg_k"])
+                os.path.join(self.config["output_dir"], "ref.index"), os.path.join(self.config["output_dir"], "hns.txt"), 
+                k=self.config["hardneg_k"])
             
         # initialize trained model
 
-        self.config['index_path' + self.suffix] = os.path.join(self.config["run_name"], "ref.index")
-        self.config['candidates_path' + self.suffix] = os.path.join(self.config["run_name"], "ref.txt")
-        self.config['encoder_path' + self.suffix] = os.path.join(self.config["run_name"], "enc_best.pth")
+        self.config['index_path' + self.suffix] = os.path.join(self.config["output_dir"], "ref.index")
+        self.config['candidates_path' + self.suffix] = os.path.join(self.config["output_dir"], "ref.txt")
+        self.config['encoder_path' + self.suffix] = os.path.join(self.config["output_dir"], "enc_best.pth")
    
     
     def infer_hardneg_dataset(self, query_dataset, ref_dataset, model, index_path, inf_save_path, k=8):
@@ -599,11 +617,11 @@ class Recognizer:
             query_paths = list(set(paired_paths))
 
         ###save query paths to file
-        with open(os.path.join(self.config["run_name"], f"query_paths.txt"), "w") as f:
+        with open(os.path.join(self.config["output_dir"], f"query_paths.txt"), "w") as f:
             for path in query_paths:
                 f.write(f"{path}\n")
 
-        query_dataset = create_hn_query_dataset(self.config["crop_dir_path"], imsize=image_size,hn_query_list=query_paths)
+        query_dataset = create_hn_query_dataset(self.config["training_data_dir_path"], imsize=image_size,hn_query_list=query_paths)
 
         print(f"Num hard neg paths: {len(query_paths)}")    
         return query_paths, query_dataset
@@ -674,7 +692,7 @@ class Recognizer:
                     if wandb_log:
                         wandb.log({"val/acc": acc})
                     if acc>zs_accuracy:
-                        self.save_model(self.config["run_name"], model, "best_cer", self.datapara)
+                        self.save_model(self.config["output_dir"], model, "best_cer", self.datapara)
                         zs_accuracy=acc
 
             if batch_idx % 100 == 0:

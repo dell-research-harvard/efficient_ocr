@@ -63,6 +63,8 @@ def get_unicode_chars_font(font_file_path):
 
 
 ####Render chars
+
+
 def render_seg(font_paths, save_path, font_path_id, random_chars_and_spaces, rand_size,ascender_char=True): # You can change the imid into folder id
     # make the folders for this iteration of one font_path_id, you can also iterate over font_path_id inside render_seg
 
@@ -202,8 +204,6 @@ def process_word_list(path_to_words,subset_N=None):
         # word_list_title = [word.title() for word in word_list]
         word_list_title = [word[0].upper() + word[1:].lower() for word in word_list]
 
-
-
         ###Arrange the word list such that the lower case words are first, then upper case, then title case and the original order is retained
         word_list=[]
         for i in range(0,len(word_list_lower)):
@@ -211,7 +211,6 @@ def process_word_list(path_to_words,subset_N=None):
             word_list.append(word_list_upper[i])
             word_list.append(word_list_title[i])
         
-
         word_list=list(set(word_list))
 
         ###Remove None
@@ -297,8 +296,6 @@ def render_all_synth_in_parallel(
 
     char_list=list(set(char_list))
 
-
-
     coverage_dict = {}
     for font_path in tqdm(font_paths):
         covered_chars = get_unicode_chars_font(font_path)
@@ -306,17 +303,23 @@ def render_all_synth_in_parallel(
         coverage_dict[font_path] = covered_chars_kanji_plus
     with open("/".join(save_path.split("/")[:-1])+"/coverage_dict.json",'w') as f:
         json.dump(coverage_dict,f,ensure_ascii=False)
+
     # I think the coverage_dict is enough to get the correct chars. 
     ###Keep only those characters in char list that are covered by at least 1 font
+
     char_list = list(set(char_list))
     char_list = [char for char in char_list if sum([char in coverage_dict[font_path] for font_path in coverage_dict])>=1]
+    
     ###Write the wods from a dir to a txt file
     ##GEn symspell words
+   
     words_to_generate=process_word_list(path_to_words=word_list_path) 
     print("processes word list")
+    
     # covered_symspell=render_save_word_list(symspell_words)
     covered_symspell=parallel_render_save_word_list(
         words_to_generate, font_paths, coverage_dict, save_path, num_processes=None,ascender_char=ascender_char)
+    
     ###Now, we need to add the words that are in labels but not in the word list. 
     print(len(covered_symspell), " images generated")
 

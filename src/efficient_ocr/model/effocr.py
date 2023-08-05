@@ -31,10 +31,16 @@ class EffOCR:
         self.data_dir = data_dir
         self.config = self._load_config(config_json)
 
-        self.line_model = self._initialize_line()
-        self.localizer_model = self._initialize_localizer()
-        self.word_model = self._initialize_word_recognizer()
-        self.char_model = self._initialize_char_recognizer()
+        if 'recog_only' in kwargs:
+            if kwargs['recog_only']:
+                self.word_model = self._initialize_word_recognizer()
+                self.char_model = self._initialize_char_recognizer()
+        else:
+            self.word_model = self._initialize_word_recognizer()
+            self.char_model = self._initialize_char_recognizer()
+            self.line_model = self._initialize_line()
+            self.localizer_model = self._initialize_localizer()
+        
 
     def _load_config(self, config_json, **kwargs):
         if isinstance(config_json, str):

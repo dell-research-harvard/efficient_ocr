@@ -262,7 +262,22 @@ class Recognizer:
             return outputs
         else:
             return [self.candidates[index] for _, index in distances_and_indices[:total_images]]
-        
+                
+
+    def train(self, data_json, **kwargs):
+
+        if not self.config['model_backend' + self.suffix] == 'timm':
+            raise NotImplementedError('Training is only supported for timm models')
+
+        ## Create training data from input coco
+        self._get_training_data(data_json)
+       
+        ## Run training 
+        self._train()
+
+        ## Initialize newly trained model
+        self.initialize_model()
+
 
     def _get_training_data(self, data_json, **kwargs):
         """
@@ -297,21 +312,6 @@ class Recognizer:
                 )
                 anno_crop.save(anno_crop_path)
                 self.anno_crop_and_text_dict[str_to_ord_str(anno_text)].append(anno_crop_path)
-                
-
-    def train(self, data_json, **kwargs):
-
-        if not self.config['model_backend' + self.suffix] == 'timm':
-            raise NotImplementedError('Training is only supported for timm models')
-
-        ## Create training data from input coco
-        self._get_training_data(data_json)
-       
-        ## Run training 
-        self._train()
-
-        ## Initialize newly trained model
-        self.initialize_model()
 
 
     def _train(self, **kwargs):
@@ -514,24 +514,7 @@ class Recognizer:
         self.config['index_path' + self.suffix] = os.path.join(self.config["run_name"], "ref.index")
         self.config['candidates_path' + self.suffix] = os.path.join(self.config["run_name"], "ref.txt")
         self.config['encoder_path' + self.suffix] = os.path.join(self.config["run_name"], "enc_best.pth")
-
-
-    @staticmethod
-    def encode_path_naming_convention(self, image_containing_anno_filename, anno_text):
-        file_stem = os.path.splitext(image_containing_anno_filename)[0]
-        if self.type == "char":
-            return f"PAIRED-{file_stem}-char-{str_to_ord_str(anno_text)}.png"
-        else:
-            return f"PAIRED-{file_stem}-word-{str_to_ord_str(anno_text)}.png"
-
- 
-    @staticmethod
-    def decode_path_naming_convention(self, path_name):
-        if self.type == "char":
-            return path_name.split("-char-")[1].split(".")[0]
-        else:
-            return path_name.split("-word-")[1].split(".")[0]
-        
+   
     
     def infer_hardneg_dataset(self, query_dataset, ref_dataset, model, index_path, inf_save_path, k=8):
         ###Now, embed the query_dataset
@@ -625,39 +608,6 @@ class Recognizer:
         print(f"Num hard neg paths: {len(query_paths)}")    
         return query_paths, query_dataset
 
-
-    @staticmethod
-    def save_ref_index(ref_dataset, model, save_path,prefix=""):
-
-        os.makedirs("indices", exist_ok=True)
-        knn_func = FaissKNN(index_init_fn=faiss.IndexFlatIP, reset_before=False, reset_after=False)
-        infm = InferenceModel(model, knn_func=knn_func)
-        infm.train_knn(ref_dataset)
-        infm.save_knn_func(os.path.join(save_path, "ref.index"))
-
-        ref_data_file_names = [os.path.basename(x[0]).split("-word-")[1].split(".")[0]  for x in ref_dataset.data]
-        with open(os.path.join(save_path, f"{prefix}ref.txt"), "w") as f:
-            f.write("\n".join(ref_data_file_names))
-
-
-    @staticmethod
-    def save_model(model_folder, enc, epoch, datapara):
-
-        if not os.path.exists(model_folder): os.makedirs(model_folder)
-
-        if datapara:
-            torch.save(enc.module.state_dict(), os.path.join(model_folder, f"enc_{epoch}.pth"))
-        else:
-            torch.save(enc.state_dict(), os.path.join(model_folder, f"enc_{epoch}.pth"))
-
-
-    @staticmethod
-    def get_all_embeddings(dataset, model, batch_size=128):
-
-        tester = testers.BaseTester(batch_size=batch_size)
-        
-        return tester.get_all_embeddings(dataset, model)
-
     
     def tester_knn(self, test_set, ref_set, model, accuracy_calculator, split, log=False):
 
@@ -744,3 +694,53 @@ class Recognizer:
 
         return zs_accuracy
    
+
+    @staticmethod
+    def save_ref_index(ref_dataset, model, save_path,prefix=""):
+
+        os.makedirs("indices", exist_ok=True)
+        knn_func = FaissKNN(index_init_fn=faiss.IndexFlatIP, reset_before=False, reset_after=False)
+        infm = InferenceModel(model, knn_func=knn_func)
+        infm.train_knn(ref_dataset)
+        infm.save_knn_func(os.path.join(save_path, "ref.index"))
+
+        ref_data_file_names = [os.path.basename(x[0]).split("-word-")[1].split(".")[0]  for x in ref_dataset.data]
+        with open(os.path.join(save_path, f"{prefix}ref.txt"), "w") as f:
+            f.write("\n".join(ref_data_file_names))
+
+
+    @staticmethod
+    def save_model(model_folder, enc, epoch, datapara):
+
+        if not os.path.exists(model_folder): os.makedirs(model_folder)
+
+        if datapara:
+            torch.save(enc.module.state_dict(), os.path.join(model_folder, f"enc_{epoch}.pth"))
+        else:
+            torch.save(enc.state_dict(), os.path.join(model_folder, f"enc_{epoch}.pth"))
+
+
+    @staticmethod
+    def get_all_embeddings(dataset, model, batch_size=128):
+
+        tester = testers.BaseTester(batch_size=batch_size)
+        
+        return tester.get_all_embeddings(dataset, model)
+
+
+    @staticmethod
+    def encode_path_naming_convention(self, image_containing_anno_filename, anno_text):
+        file_stem = os.path.splitext(image_containing_anno_filename)[0]
+        if self.type == "char":
+            return f"PAIRED-{file_stem}-char-{str_to_ord_str(anno_text)}.png"
+        else:
+            return f"PAIRED-{file_stem}-word-{str_to_ord_str(anno_text)}.png"
+
+ 
+    @staticmethod
+    def decode_path_naming_convention(self, path_name):
+        if self.type == "char":
+            return path_name.split("-char-")[1].split(".")[0]
+        else:
+            return path_name.split("-word-")[1].split(".")[0]
+

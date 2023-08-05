@@ -1,60 +1,10 @@
-from PIL import ImageFont, ImageDraw, Image
+from PIL import Image
 import numpy as np
 from torchvision import transforms as T
 import torch
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 import albumentations as A
 import kornia
-import os
-from glob import glob
-import random
-import matplotlib.pyplot as plt
-
-
-class ResizeWidth:
-
-    def __init__(self, pcts):
-
-        self.pcts = pcts
-
-    def __call__(self, image):
-
-        _, h, w = image.size()
-        new_w =[int(w*p) for p in self.pcts]        
-        
-        return T.Resize((h, np.random.choice(new_w)))(image)
-
-
-def dilate(x):
-    return kornia.morphology.dilation(x.unsqueeze(0), 
-                                      kernel=torch.ones(5, 5)).squeeze(0)
-
-
-def erode(x):
-    return kornia.morphology.erosion(x.unsqueeze(0), 
-                                     kernel=torch.ones(5, 5)).squeeze(0)
-
-
-class TransformLoader:
-    def __init__(self, loader, transform):
-        self.loader = loader
-        self.transform = transform
-
-    def __iter__(self):
-        for data, target in self.loader:
-            ##EAch data is a tensor of 252 images. We need to traansform each image 
-            ##First, unstack the data by axis 0
-            data = torch.unbind(data, dim=0)
-            ##Now apply the transform to each image
-            data = [self.transform((T.ToPILImage()(word)))  for word in data]
-            ##Now stack the images back together
-            data = torch.stack(data)
-
-            
-            yield data, target
-
-    def __len__(self):
-        return len(self.loader)
 
 
 BASE_TRANSFORM = T.Compose([
@@ -74,6 +24,125 @@ INV_NORMALIZE = T.Normalize(
    mean= [-m/s for m, s in zip(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD)],
    std= [1/s for s in IMAGENET_DEFAULT_STD]
 )
+
+
+class ResizeWidth:
+
+
+    def __init__(self, pcts):
+
+        self.pcts = pcts
+
+
+    def __call__(self, image):
+
+        _, h, w = image.size()
+        new_w =[int(w*p) for p in self.pcts]        
+        
+        return T.Resize((h, np.random.choice(new_w)))(image)
+
+
+class TransformLoader:
+
+
+    def __init__(self, loader, transform):
+        self.loader = loader
+        self.transform = transform
+
+
+    def __iter__(self):
+        for data, target in self.loader:
+            ##EAch data is a tensor of 252 images. We need to traansform each image 
+            ##First, unstack the data by axis 0
+            data = torch.unbind(data, dim=0)
+            ##Now apply the transform to each image
+            data = [self.transform((T.ToPILImage()(word)))  for word in data]
+            ##Now stack the images back together
+            data = torch.stack(data)
+
+            yield data, target
+
+
+    def __len__(self):
+        return len(self.loader)
+
+
+class CharMedianPad:
+
+
+    def __init__(self, override=None):
+
+        self.override = override
+
+
+    def __call__(self, image):
+
+        image = Image.fromarray(image) if isinstance(image, np.ndarray) else image
+        max_side = max(image.size)
+        pad_x, pad_y = [max_side - s for s in image.size]
+        padding = (0, 0, pad_x, pad_y)
+
+        imgarray = np.array(image)
+        h, w, c = imgarray.shape
+        rightb, leftb = imgarray[:,w-1,:], imgarray[:,0,:]
+        topb, bottomb = imgarray[0,:,:], imgarray[h-1,:,:]
+        bordervals = np.concatenate([rightb, leftb, topb, bottomb], axis=0)
+        medval = tuple([int(v) for v in np.median(bordervals, axis=0)])
+
+        return T.Pad(padding, fill=medval if self.override is None else self.override)(image)
+
+
+class MedianPad:
+    """This padding preserves the aspect ratio of the image. It also pads the image with the median value of the border pixels. 
+    Note how it also centres the ROI in the padded image."""
+
+
+    def __init__(self, override=None,random_pad=False):
+
+        self.override = override
+        self.random_pad=random_pad
+
+
+    def __call__(self, image):
+
+        ##Convert to RGB 
+        image = image.convert("RGB") if isinstance(image, Image.Image) else image
+        image = Image.fromarray(image) if isinstance(image, np.ndarray) else image
+        max_side = max(image.size)
+        aspect_ratio = image.size[0] / image.size[1]
+        if aspect_ratio<1.5:
+            pad_x, pad_y = [2*max_side - (0.5*s) for s in image.size]
+        else:
+            pad_x, pad_y = [max_side - (0.9*s) for s in image.size]
+
+        if self.random_pad:
+            ###randomly move crop up and down by varying the padding - this also randomly incrases and decreases size.
+            random_top_pad=np.random.uniform(1, 10)
+            random_bottom_pad=np.random.uniform(1, 10)
+            padding = (round((pad_x)/random_top_pad), round((pad_y)/random_top_pad), round((pad_x)/random_bottom_pad), round((pad_y)/random_bottom_pad)) ##Added some extra to avoid info on the long edge
+        else:
+            padding = (round((pad_x)/2), round((pad_y)/2), round((pad_x)/2), round((pad_y)/2)) ##Added some extra to avoid info on the long edge
+
+        imgarray = np.array(image)
+        h, w , c= imgarray.shape
+        rightb, leftb = imgarray[:,w-1,:], imgarray[:,0,:]
+        topb, bottomb = imgarray[0,:,:], imgarray[h-1,:,:]
+        bordervals = np.concatenate([rightb, leftb, topb, bottomb], axis=0)
+        medval = tuple([int(v) for v in np.median(bordervals, axis=0)])
+
+        padded_image=T.Pad(padding, fill=medval if self.override is None else self.override)(image)
+        ##Aspect ratio 
+        return padded_image
+
+
+def dilate(x):
+    return kornia.morphology.dilation(x.unsqueeze(0), 
+                                      kernel=torch.ones(5, 5)).squeeze(0)
+
+
+def erode(x):
+    return kornia.morphology.erosion(x.unsqueeze(0), 
+                                     kernel=torch.ones(5, 5)).squeeze(0)
 
 
 def random_erode_dilate(x):
@@ -116,71 +185,6 @@ def blur_transform(high):
         return  T.RandomApply([T.GaussianBlur(11, sigma=(0.1, 2.0))], p=0.3)
 
 
-class CharMedianPad:
-
-    def __init__(self, override=None):
-
-        self.override = override
-
-    def __call__(self, image):
-
-
-        image = Image.fromarray(image) if isinstance(image, np.ndarray) else image
-        max_side = max(image.size)
-        pad_x, pad_y = [max_side - s for s in image.size]
-        padding = (0, 0, pad_x, pad_y)
-
-        imgarray = np.array(image)
-        h, w, c = imgarray.shape
-        rightb, leftb = imgarray[:,w-1,:], imgarray[:,0,:]
-        topb, bottomb = imgarray[0,:,:], imgarray[h-1,:,:]
-        bordervals = np.concatenate([rightb, leftb, topb, bottomb], axis=0)
-        medval = tuple([int(v) for v in np.median(bordervals, axis=0)])
-
-        return T.Pad(padding, fill=medval if self.override is None else self.override)(image)
-
-
-class MedianPad:
-    """This padding preserves the aspect ratio of the image. It also pads the image with the median value of the border pixels. 
-    Note how it also centres the ROI in the padded image."""
-
-    def __init__(self, override=None,random_pad=False):
-
-        self.override = override
-        self.random_pad=random_pad
-
-    def __call__(self, image):
-
-        ##Convert to RGB 
-        image = image.convert("RGB") if isinstance(image, Image.Image) else image
-        image = Image.fromarray(image) if isinstance(image, np.ndarray) else image
-        max_side = max(image.size)
-        aspect_ratio = image.size[0] / image.size[1]
-        if aspect_ratio<1.5:
-            pad_x, pad_y = [2*max_side - (0.5*s) for s in image.size]
-        else:
-            pad_x, pad_y = [max_side - (0.9*s) for s in image.size]
-
-        if self.random_pad:
-            ###randomly move crop up and down by varying the padding - this also randomly incrases and decreases size.
-            random_top_pad=np.random.uniform(1, 10)
-            random_bottom_pad=np.random.uniform(1, 10)
-            padding = (round((pad_x)/random_top_pad), round((pad_y)/random_top_pad), round((pad_x)/random_bottom_pad), round((pad_y)/random_bottom_pad)) ##Added some extra to avoid info on the long edge
-        else:
-            padding = (round((pad_x)/2), round((pad_y)/2), round((pad_x)/2), round((pad_y)/2)) ##Added some extra to avoid info on the long edge
-
-        imgarray = np.array(image)
-        h, w , c= imgarray.shape
-        rightb, leftb = imgarray[:,w-1,:], imgarray[:,0,:]
-        topb, bottomb = imgarray[0,:,:], imgarray[h-1,:,:]
-        bordervals = np.concatenate([rightb, leftb, topb, bottomb], axis=0)
-        medval = tuple([int(v) for v in np.median(bordervals, axis=0)])
-
-        padded_image=T.Pad(padding, fill=medval if self.override is None else self.override)(image)
-        ##Aspect ratio 
-        return padded_image
-
-
 def create_render_transform_char(char_trans_version, latin_suggested_augs, size=224):
     if char_trans_version == 4: # V4
         return T.Compose([
@@ -220,9 +224,8 @@ def create_render_transform_char(char_trans_version, latin_suggested_augs, size=
         ])
 
 
-
-###For all median pad, make it NONE to fill with median value
 def create_render_transform(high_blur, size=224,normalize=True,resize_pad=True):
+    ###For all median pad, make it NONE to fill with median value
     ##Reudced affine translate from 0.1 to 0.045
     return T.Compose([
         T.ToTensor(),
@@ -262,7 +265,6 @@ def create_render_transform(high_blur, size=224,normalize=True,resize_pad=True):
     ])
 
 
-
 def create_paired_transform(size=224):
     return T.Compose([
         T.ToTensor(),
@@ -276,13 +278,11 @@ def create_paired_transform(size=224):
 
 def create_paired_transform_char(size=224):
     return T.Compose([
+        CharMedianPad(override=(255,255,255)),
         T.ToTensor(),
-        T.ToPILImage(),
-        CharMedianPad(),
         T.Resize((size, size)),
         T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
     ])
-
 
 
 def create_inference_transform(size=224):
@@ -292,7 +292,6 @@ def create_inference_transform(size=224):
         CharMedianPad(override=(255,255,255)),
         T.Resize((size, size)),
     ])
-
 
 
 def create_inference_transform_char(size=224):

@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import Dataset, Subset
+from torch.utils.data import Dataset
 from torchvision.datasets import ImageFolder
 from torchvision.datasets.folder import IMG_EXTENSIONS, default_loader
 import os
@@ -18,8 +18,8 @@ def diff_size_collate(batch):
     return [data, target]
 
 
-
 class CustomSubset(Dataset):
+
 
     def __init__(self, dataset, indices):
         self.super_dataset = dataset
@@ -28,31 +28,36 @@ class CustomSubset(Dataset):
         self.targets_dict = {idx: target for idx, target in tqdm(enumerate(dataset.targets))}
         self.path_dict = {idx: path for idx, path in tqdm(enumerate(dataset.data))}
 
+
     def __getitem__(self, idx):
         image, target = self.super_dataset[self.indices[idx]]
         return (image, target)
 
+
     def __len__(self):
         return len(self.indices)
+
 
     @property
     def targets(self):
         return [self.targets_dict[idx] for idx in self.indices]
     
+
     @property
     def paths(self):
         return [self.path_dict[idx] for idx in self.indices]
     
+
     @property
     def data(self):
         return [self.super_dataset.data[idx] for idx in self.indices]
     
+
     @property
     def subsetted_targets_dict(self):
         """Only return target dict for subsetted self.indices. Use the targets property instead"""
         new_targets_dict = {new_idx: self.targets_dict[idx] for new_idx, idx in enumerate(self.indices)}
         return new_targets_dict
-
 
         
     @property
@@ -61,13 +66,13 @@ class CustomSubset(Dataset):
         new_path_dict = {new_idx: self.path_dict[idx] for new_idx, idx in enumerate(self.indices)}
         return new_path_dict
 
-
-
-    
+  
 class FontImageFolder(ImageFolder):
     """
     Expand factor is a beta feature that expands the dataset by a factor of expand_factor. Use at your own risk. 
     """
+
+
     def __init__(
         self, root, render_transform=None, paired_transform=None, patch_resize=False,
         loader=default_loader, is_valid_file=None, expand_factor=1 
@@ -101,6 +106,7 @@ class FontImageFolder(ImageFolder):
             sample = self.render_transform(sample)
 
         return sample, target
+
 
     def __len__(self):
         return len(self.data)
@@ -279,6 +285,7 @@ def create_paired_dataset(root_dir,train_mode="character", imsize=224):
 
 
 def create_render_dataset(root_dir,train_mode="character", imsize=224, font_name=""):
+
     if train_mode == "character":
         paired_transform = render_transform = create_paired_transform_char(imsize)
     else:
@@ -287,9 +294,12 @@ def create_render_dataset(root_dir,train_mode="character", imsize=224, font_name
     idx_render = [idx for idx, (p, t) in enumerate(tqdm(dataset.data)) if font_name in p and not os.path.basename(p).startswith("PAIRED")]
     render_dataset = CustomSubset(dataset, idx_render)
     print(f"Len render dataset: {len(render_dataset)}")
+
     return render_dataset
 
+
 def create_hn_query_dataset(root_dir,train_mode="character", imsize=224,hn_query_list=[]):
+
     if train_mode == "character":
         paired_transform = render_transform = create_paired_transform_char(imsize)
     else:
@@ -300,8 +310,8 @@ def create_hn_query_dataset(root_dir,train_mode="character", imsize=224,hn_query
 
     idx_hn_query = [idx for idx, (p, t) in enumerate(tqdm(dataset.data)) if p in unique_hn_query_list]
     
-
     hn_query_dataset = CustomSubset(dataset, idx_hn_query)
     print(f"Len hn query dataset: {len(hn_query_dataset)}")
     
     return hn_query_dataset
+

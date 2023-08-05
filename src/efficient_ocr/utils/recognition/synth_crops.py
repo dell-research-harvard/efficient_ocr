@@ -2,11 +2,8 @@
 
 # Generate words using words from a list (dictionary/place names)
 
-from tkinter import HORIZONTAL, font
-from numpy.lib.function_base import kaiser
 import torchvision.transforms as T
 import numpy as np
-import pandas as pd
 import os
 from tqdm import tqdm
 
@@ -14,16 +11,13 @@ from PIL import ImageOps, Image, ImageFont, ImageDraw
 import os
 from tqdm import tqdm
 import json
-
-from fontTools.unicode import Unicode
-import json
 from glob import glob
-from collections import defaultdict
 from fontTools.ttLib import TTFont
 import multiprocessing as mp
 from torch import nn
 
 ####Font utils
+
 
 def word_code_to_string(word_code):
 
@@ -34,9 +28,6 @@ def word_code_to_string(word_code):
     else:
         return "".join([chr(int(char)) for char in split_code])
 
-
-
-     
 
 def string_to_word_code(word_string):
     return "_".join([str(ord(char)) for char in word_string])
@@ -56,6 +47,7 @@ def load_chars(path):
     with open(path) as f:
         uni = f.read().split("\n")
     return [u.split("\t") for u in uni]
+
 
 def get_unicode_chars_font(font_file_path):
     """Get all unicode characters in a font file"""
@@ -147,7 +139,6 @@ def draw_single_char(ch, font, canvas_size, padding=0.):
     return img
 
 
-
 def draw_single_char_ascender(ch, font, canvas_size, padding=0.):
     canvas_width, canvas_height = (canvas_size * 5, canvas_size * 5)
     img = Image.new('RGB', (canvas_width, canvas_height), (0, 0, 0))
@@ -162,7 +153,6 @@ def draw_single_char_ascender(ch, font, canvas_size, padding=0.):
     x0, y0, x1, h = x0-(hdist*padding), y0-(vdist*padding), x1+(hdist*padding), h+(vdist*padding)
     uninverted_image = img.crop((x0, 0, x1, h))
     return ImageOps.invert(uninverted_image)
-
 
 
 def draw_word_from_text(text,font,font_size):
@@ -232,7 +222,8 @@ def process_word_list(path_to_words,subset_N=None):
         word_list = [word for word in word_list if word != '']
 
         return word_list
-    
+
+ 
 def render_save_word_list(word_list, font_paths, coverage_dict, save_path,ascender_char=True):
     word_list_covered = []
     for word in word_list:
@@ -249,6 +240,7 @@ def render_save_word_list(word_list, font_paths, coverage_dict, save_path,ascend
             image_name_H, rimg_H = render_seg(font_paths, save_path, font_path_id, word, rand_size,ascender_char=ascender_char)
             word_list_covered.append(word)
     return word_list_covered  
+
 
 def parallel_render_save_word_list(word_list, font_paths, coverage_dict, save_path, num_processes=4,ascender_char=True):
     
@@ -276,7 +268,6 @@ def parallel_render_save_word_list(word_list, font_paths, coverage_dict, save_pa
     pool.join()
 
     return word_list_covered
-
 
 
 def render_all_synth_in_parallel(
@@ -328,7 +319,8 @@ def render_all_synth_in_parallel(
         words_to_generate, font_paths, coverage_dict, save_path, num_processes=None,ascender_char=ascender_char)
     ###Now, we need to add the words that are in labels but not in the word list. 
     print(len(covered_symspell), " images generated")
-    
+
+
 # if __name__ == '__main__':
 
 #     # Change the path to CGIS

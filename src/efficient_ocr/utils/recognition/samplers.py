@@ -21,6 +21,7 @@ def get_label_to_paths(dataset):
     
     return labels_to_paths
 
+
 def get_label_to_paired_unpaired_indices(dataset):
     labels = set(dataset.targets)
     targets_dict = dataset.subsetted_targets_dict 
@@ -54,10 +55,6 @@ def get_label_to_paired_unpaired_indices(dataset):
 
     
     return label_to_paired_indices, label_to_unpaired_indices
-
-
-
-
 
 
 class NoReplacementMPerClassSampler(Sampler):
@@ -365,3 +362,4 @@ class AllHNSamplerSplitBatchesPairRender(Sampler):
         print("Number of batches", len(_idx_list)/self.batch_size)
 
         return iter(_idx_list)
+

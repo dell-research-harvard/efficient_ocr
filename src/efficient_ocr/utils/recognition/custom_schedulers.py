@@ -1,20 +1,14 @@
 import math
-import torch
-
-import types
-import math
-from torch import inf
 from functools import wraps
 import warnings
 import weakref
-from collections import Counter
-from bisect import bisect_right
-
 from torch.optim import Optimizer
+
 
 __all__ = ['LambdaLR', 'MultiplicativeLR', 'StepLR', 'MultiStepLR', 'ConstantLR', 'LinearLR',
            'ExponentialLR', 'SequentialLR', 'CosineAnnealingLR', 'ChainedScheduler', 'ReduceLROnPlateau',
            'CyclicLR', 'CosineAnnealingWarmRestarts', 'OneCycleLR', 'PolynomialLR', 'LRScheduler']
+
 
 EPOCH_DEPRECATION_WARNING = (
     "The epoch parameter in `scheduler.step()` was not necessary and is being "
@@ -27,6 +21,7 @@ EPOCH_DEPRECATION_WARNING = (
 
 
 class LRScheduler:
+
 
     def __init__(self, optimizer, last_epoch=-1, verbose=False):
 
@@ -81,11 +76,13 @@ class LRScheduler:
 
         self._initial_step()
 
+
     def _initial_step(self):
         """Initialize step counts and performs a step"""
         self.optimizer._step_count = 0
         self._step_count = 0
         self.step()
+
 
     def state_dict(self):
         """Returns the state of the scheduler as a :class:`dict`.
@@ -94,6 +91,7 @@ class LRScheduler:
         is not the optimizer.
         """
         return {key: value for key, value in self.__dict__.items() if key != 'optimizer'}
+
 
     def load_state_dict(self, state_dict):
         """Loads the schedulers state.
@@ -104,14 +102,17 @@ class LRScheduler:
         """
         self.__dict__.update(state_dict)
 
+
     def get_last_lr(self):
         """ Return last computed learning rate by current scheduler.
         """
         return self._last_lr
 
+
     def get_lr(self):
         # Compute learning rate using chainable form of the scheduler
         raise NotImplementedError
+
 
     def print_lr(self, is_verbose, group, lr, epoch=None):
         """Display the current learning rate.
@@ -167,34 +168,42 @@ class LRScheduler:
         self._last_lr = [group['lr'] for group in self.optimizer.param_groups]
 
 
-# Including _LRScheduler for backwards compatibility
-# Subclass instead of assign because we want __name__ of _LRScheduler to be _LRScheduler (assigning would make it LRScheduler).
 class _LRScheduler(LRScheduler):
+    # Including _LRScheduler for backwards compatibility
+    # Subclass instead of assign because we want __name__ of _LRScheduler to be _LRScheduler (assigning would make it LRScheduler).
     pass
 
 
 class _enable_get_lr_call:
 
+
     def __init__(self, o):
         self.o = o
+
 
     def __enter__(self):
         self.o._get_lr_called_within_step = True
         return self
 
+
     def __exit__(self, type, value, traceback):
         self.o._g
 
+
 class CosineAnnealingDecWarmRestarts(LRScheduler):
+
+
     def __init__(self, optimizer, T_0, T_mult=1, eta_min=0, last_epoch=-1, verbose=False, l_dec=0.1):
         self.T_0, self.T_i, self.T_mult, self.eta_min = T_0, T_0, T_mult, eta_min
         self.T_cur, self.l_dec = last_epoch, l_dec
         super().__init__(optimizer, last_epoch, verbose)
         self.eta_max = self.optimizer.param_groups[0]['lr']
 
+
     def get_lr(self):
         return [self.eta_min + (self.eta_max - self.eta_min) / 2 * (1 + math.cos(math.pi * self.T_cur / self.T_i))
                 for _ in self.optimizer.param_groups]
+
 
     def step(self, epoch=None):
         if epoch is None and self.last_epoch < 0:
@@ -231,6 +240,7 @@ class CosineAnnealingDecWarmRestarts(LRScheduler):
 
         self._last_lr = [group['lr'] for group in self.optimizer.param_groups]
 
+
     def _enable_get_lr_call(self):
         class _ContextManager:
             def __init__(self, o):
@@ -244,3 +254,4 @@ class CosineAnnealingDecWarmRestarts(LRScheduler):
                 self.o._get_lr_called_within_step = False
                 return self
         return _ContextManager(self)
+

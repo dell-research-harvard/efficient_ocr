@@ -44,31 +44,29 @@ from ..utils.recognition.encoders import AutoEncoderFactory
 DEFAULT_RECOGNIZER_CONFIG = {
 
     # global options
-    'wandb_project': "package_tests",
-    'data_dir': "/mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_datasets/locca/images",
+    'wandb_project': None,
     'train_val_test_split': [0.7, 0.15, 0.15],
-    "font_dir_path": '/mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_font_files',
-    "output_dir": 'effocr_package_test_locca',
+    "font_dir_path": None,
+    "output_dir": 'output',
     "hns_txt_path": None,
     "checkpoint": None,
     "epoch_viz_dir": None,
-
-    # training mode, 'word' or 'char'
-    "train_mode": 'char',
 
     # mode specific options
     'model_backend_word': 'timm',
     'model_backend_char': 'timm',
     'timm_model_name_word': 'mobilenetv3_small_050.lamb_in1k',
     'timm_model_name_char': 'mobilenetv3_small_050.lamb_in1k',
-    "render_dict_word": '/mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/e2e2e/end-to-end-pipeline/pipeline_egress/silver_dpd/full_wordlist_effocr.txt',
-    "render_dict_char": '/mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_charsets/allchars.txt',
+    "render_dict_word": None,
+    "render_dict_char": None,
 
     # would be None if want to create new training data from data_json and train on that
-    "training_data_dir_path_word": '/mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/word_level_effocr/fullsym_locc_dict_words_paired_silver/images',
-    "training_data_dir_path_char": '/mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_char_crops/locca',
+    "training_data_dir_path_word": None,
+    "training_data_dir_path_char": None,
 
     # core model object contents, if None to be created through training
+    'pretrained_word': False,
+    'pretrained_char': False,
     'encoder_path_word': None,
     'index_path_word': None,
     'candidates_path_word': None,
@@ -220,11 +218,20 @@ class Recognizer:
 
         self.type = type
         self.suffix = '_' + type
-        self.initialize_model()
+
+        if self.config["pretrained" + self.suffix]:
+            if self.config['encoder_path'+ self.suffix] is None or \
+                self.config['index_path'+ self.suffix] is None or \
+                    self.config['candidates_path'+ self.suffix] is None:
+                raise ValueError('Pretrained model requires encoder_path, index_path, and candidates_path')
+            else:
+                self.initialize_model()
+
         self.transform = get_transform(type)
 
 
     def initialize_model(self):
+
         self.index = faiss.read_index(self.config['index_path' + self.suffix])
         with open(self.config['candidates_path' + self.suffix], 'r') as f:
             self.candidates = f.read().splitlines()
@@ -265,13 +272,18 @@ class Recognizer:
             return [self.candidates[index] for _, index in distances_and_indices[:total_images]]
                 
 
-    def train(self, data_json, **kwargs):
+    def train(self, data_json, data_dir, config, **kwargs):
+
+        for key, value in kwargs.items():
+            self.config[key] = value
+        for key, value in config.items():
+            self.config[key] = value
 
         if not self.config['model_backend' + self.suffix] == 'timm':
             raise NotImplementedError('Training is only supported for timm models')
 
         ## Create training data from input coco if not already created
-        self._get_training_data(data_json)
+        self._get_training_data(data_json, data_dir)
        
         ## Run training 
         self._train()
@@ -280,17 +292,17 @@ class Recognizer:
         self.initialize_model()
 
 
-    def _get_training_data(self, data_json, **kwargs):
+    def _get_training_data(self, data_json, data_dir, **kwargs):
         """
         Transcriptions are currently being passed along with file names
         """
 
         if self.config["training_data_dir_path"+self.suffix] is None:
 
-            # create trainin data folder
+            # create training data folder
 
             self.config["training_data_dir_path"+self.suffix] = \
-                os.path.join(self.config["output_dir"] + self.suffix, "training_data")
+                os.path.join(self.config["output_dir"], "training_data" + self.suffix)
 
             # open data json in coco format
 
@@ -316,7 +328,7 @@ class Recognizer:
             for anno in tqdm(data_dict["annotations"]):
                 if anno["category_id"] == type_catid:
                     image_containing_anno_filename = imageid_filename_dict[anno["image_id"]]
-                    image_containing_anno_path = os.path.join(self.config["data_dir"], image_containing_anno_filename)
+                    image_containing_anno_path = os.path.join(data_dir, image_containing_anno_filename)
                     anno_text = anno["text"]
                     image_containing_anno = PIL.Image.open(image_containing_anno_path)
                     ax, ay, aw, ah = anno["bbox"] # should be in xywh format in COCO, should do some checking for this
@@ -330,8 +342,13 @@ class Recognizer:
 
             # create synthetic data
 
+            if self.config["render_dict"+self.suffix] is None:
+                raise ValueError("render_dict"+self.suffix+" must be specified if existing training data is not specified")
+            elif self.config["font_dir_path"] is None:
+                raise ValueError("font_dir_path must be specified if existing training data is not specified")
+
             render_all_synth_in_parallel(
-                self.config["training_data_dir_path"], 
+                self.config["training_data_dir_path"+self.suffix], 
                 self.config["font_dir_path"], 
                 self.config["render_dict"+self.suffix], 
                 self.config["ascender"]
@@ -343,40 +360,43 @@ class Recognizer:
             for k, v in self.anno_crop_and_text_dict.items():
                 for anno_img_path in v:
                     assert "PAIRED" in anno_img_path
-                    shutil.copy(anno_img_path, os.path.join(self.config["training_data_dir_path"], k))
-                    self.all_paired_image_paths.append(os.path.join(self.config["training_data_dir_path"], k, anno_img_path))
+                    shutil.copy(anno_img_path, os.path.join(self.config["training_data_dir_path"+self.suffix], k))
+                    self.all_paired_image_paths.append(os.path.join(self.config["training_data_dir_path"+self.suffix], k, anno_img_path))
 
         else:
 
-            self.all_paired_image_paths = glob(os.path.join(self.config["training_data_dir_path"], "**", "PAIRED*"), recursive=True)
+            self.all_paired_image_paths = glob(os.path.join(self.config["training_data_dir_path"+self.suffix], "**", "PAIRED*"), recursive=True)
 
 
-    def _train(self):
+    def _train(self, splitseed=99):
 
         # create splits
 
-        np.random.seed(99)
+        np.random.seed(splitseed)
         np.random.shuffle(self.all_paired_image_paths)
 
         train_end_idx = len(self.all_paired_image_paths) * self.config["train_val_test_split"][0]
         val_end_idx = len(self.all_paired_image_paths) * (self.config["train_val_test_split"][0] + self.config["train_val_test_split"][1])
 
         train_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[:train_end_idx]]}
-        with open(os.path.join(self.config["output_dir"], "train_paired_image_paths_json.json"), "w") as f:
+        train_paired_image_json_path = os.path.join(self.config["output_dir"], f"train_paired_image_paths_json{self.suffix}.json")
+        with open(train_paired_image_json_path, "w") as f:
             json.dump(train_paired_image_paths, f)
 
         val_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[train_end_idx:val_end_idx]]}
-        with open(os.path.join(self.config["output_dir"], "val_paired_image_paths_json.json"), "w") as f:
+        val_paired_image_json_path = os.path.join(self.config["output_dir"], f"val_paired_image_paths_json{self.suffix}.json")
+        with open(val_paired_image_json_path, "w") as f:
             json.dump(val_paired_image_paths, f)
 
         test_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[val_end_idx:]]}
-        with open(os.path.join(self.config["output_dir"], "test_paired_image_paths_json.json"), "w") as f:
+        test_paired_image_json_path = os.path.join(self.config["output_dir"], f"test_paired_image_paths_json{self.suffix}.json")
+        with open(test_paired_image_json_path, "w") as f:
             json.dump(test_paired_image_paths, f)
 
         # setup
 
         if not self.config["wandb_project"] is None:
-            wandb.init(project=self.config["wandb_project"], name=self.config["output_dir"])
+            wandb.init(project=self.config["wandb_project"], name=os.path.basename(self.config["output_dir"]))
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         os.makedirs(self.config["output_dir"], exist_ok=True)
 
@@ -413,13 +433,13 @@ class Recognizer:
         train_dataset, val_dataset, test_dataset, \
                     train_loader, val_loader, test_loader, num_batches = \
             create_dataset(
-                self.config["training_data_dir_path"], 
-                os.path.join(self.config["output_dir"], self.config["train_paired_image_paths_json"]),
-                os.path.join(self.config["output_dir"], self.config["val_paired_image_paths_json"]), 
-                os.path.join(self.config["output_dir"], self.config["test_paired_image_paths_json"]), 
+                self.config["training_data_dir_path"+self.suffix], 
+                train_paired_image_json_path,
+                val_paired_image_json_path, 
+                test_paired_image_json_path, 
                 self.config["batch_size"],
                 hardmined_txt=self.config["hns_txt_path"], 
-                train_mode=self.config["train_mode"],
+                train_mode=self.type,
                 m=self.config["m"], 
                 finetune=self.config["finetune"],
                 pretrain=self.config["pretrain"],
@@ -440,8 +460,8 @@ class Recognizer:
         self.test_dataset = test_dataset
 
         render_dataset = create_render_dataset(
-            self.config["training_data_dir_path"],
-            train_mode=self.config["train_mode"],
+            self.config["training_data_dir_path"+self.suffix],
+            train_mode=self.type,
             font_name=self.config["default_font_name"],
             imsize=self.config["imsize"],
         )
@@ -621,7 +641,7 @@ class Recognizer:
             for path in query_paths:
                 f.write(f"{path}\n")
 
-        query_dataset = create_hn_query_dataset(self.config["training_data_dir_path"], imsize=image_size,hn_query_list=query_paths)
+        query_dataset = create_hn_query_dataset(self.config["training_data_dir_path"+self.suffix], imsize=image_size,hn_query_list=query_paths)
 
         print(f"Num hard neg paths: {len(query_paths)}")    
         return query_paths, query_dataset

@@ -18,7 +18,7 @@ class EffOCRResult:
 
 class EffOCR:
 
-    def __init__(self, data_json, config_json, **kwargs):
+    def __init__(self, data_json, data_dir, config_json, **kwargs):
 
         self.training_funcs = {'line_detection': self._train_line,
                                 'word_and_character_detection': self._train_localizer,
@@ -28,6 +28,7 @@ class EffOCR:
         with open(data_json, 'r') as f:
             self.data_json = json.load(f)
 
+        self.data_dir = data_dir
         self.config = self._load_config(config_json)
 
         self.line_model = self._initialize_line()
@@ -88,10 +89,10 @@ class EffOCR:
         self.localizer_model.train(self.data_json, **kwargs)
 
     def _train_word_recognizer(self, **kwargs):
-        self.word_model.train(self.data_json, self.config, **kwargs)
+        self.word_model.train(self.data_json, self.data_dir, self.config, **kwargs)
 
     def _train_char_recognizer(self, **kwargs):
-        self.char_model.train(self.data_json, self.config, **kwargs)
+        self.char_model.train(self.data_json, self.data_dir, self.config, **kwargs)
 
     
     ### TOM

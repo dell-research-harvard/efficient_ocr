@@ -180,4 +180,4 @@ runs/
 
 # legacy recognizer dir
 
-recognizer_training/
+**/recognizer_training/

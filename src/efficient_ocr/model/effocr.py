@@ -92,11 +92,11 @@ class EffOCR:
 
     ### ABHISHEK (and Jake)
     def _train_word_recognizer(self, **kwargs):
-        self.word_model = train_word(self.word_model, self.data_json, self.config, **kwargs)
+        self.word_model.train(self.data_json, self.config, **kwargs)
 
     ### JAKE
     def _train_char_recognizer(self, **kwargs):
-        self.char_model = train_char(self.char_model, self.data_json, self.config, **kwargs)
+        self.char_model.train(self.data_json, self.config, **kwargs)
 
     
     ### TOM

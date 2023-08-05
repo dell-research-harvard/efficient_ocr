@@ -23,8 +23,6 @@ from tqdm import tqdm
 from utils.custom_schedulers import CosineAnnealingDecWarmRestarts
 from synth_crops import render_all_synth_in_parallel
 
-
-
 def infer_hardneg_dataset(query_dataset, ref_dataset, model, index_path, inf_save_path, k=8):
     ###Now, embed the query_dataset
     query_embeddings,_ = get_all_embeddings(query_dataset, model)
@@ -120,9 +118,6 @@ def prepare_hn_query_paths(query_paths,train_dataset,paired_hn=True,font_paths=[
     print(f"Num hard neg paths: {len(query_paths)}")    
     return query_paths, query_dataset
 
-
-
-
 def save_ref_index(ref_dataset, model, save_path,prefix=""):
 
     os.makedirs("indices", exist_ok=True)
@@ -135,8 +130,6 @@ def save_ref_index(ref_dataset, model, save_path,prefix=""):
     with open(os.path.join(save_path, f"{prefix}ref.txt"), "w") as f:
         f.write("\n".join(ref_data_file_names))
 
-
-
 def save_model(model_folder, enc, epoch, datapara):
 
     if not os.path.exists(model_folder): os.makedirs(model_folder)
@@ -146,13 +139,11 @@ def save_model(model_folder, enc, epoch, datapara):
     else:
         torch.save(enc.state_dict(), os.path.join(model_folder, f"enc_{epoch}.pth"))
 
-
 def get_all_embeddings(dataset, model, batch_size=128):
 
     tester = testers.BaseTester(batch_size=batch_size)
     
     return tester.get_all_embeddings(dataset, model)
-
 
 def tester_knn(test_set, ref_set, model, accuracy_calculator, split, log=False):
 
@@ -178,10 +169,6 @@ def tester_knn(test_set, ref_set, model, accuracy_calculator, split, log=False):
         wandb.log({f"{split}/accuracy": prec_1})
     print(f"Accuracy on {split} set (Precision@1) = {prec_1}")
     return prec_1
-
-
-
-
 
 def trainer_knn_with_eval(model, loss_func, device, train_loader, optimizer, epoch, epochviz=None, diff_sizes=False,scheduler=None,int_eval_steps=None,zs_accuracy=0,wandb_log=False):
 
@@ -235,11 +222,7 @@ def trainer_knn_with_eval(model, loss_func, device, train_loader, optimizer, epo
             if wandb_log:
                 wandb.log({"train/lr": scheduler.get_lr()[0]})
     return zs_accuracy
-
-
-
-
-                    
+               
 if __name__ == "__main__":
 
     # args

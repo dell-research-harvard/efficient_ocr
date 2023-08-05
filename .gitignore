@@ -177,3 +177,7 @@ tests/fixtures/localizer/
 # yolo results
 runs/
 *.png
+
+# legacy recognizer dir
+
+recognizer_training/

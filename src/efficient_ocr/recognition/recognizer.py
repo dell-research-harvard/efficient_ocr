@@ -237,7 +237,9 @@ class Recognizer:
 
         if self.config['model_backend' + self.suffix] == 'timm':
             model = timm.create_model(self.config['timm_model_name' + self.suffix], num_classes=0, pretrained=True)
-            self.model = model.load_state_dict(torch.load(self.config['encoder_path' + self.suffix]))
+            pretrained_dict = torch.load(self.config['encoder_path' + self.suffix])
+            pretrained_dict = {k.replace("net.", ""): v for k, v in pretrained_dict.items() if k.startswith("net.")}
+            self.model = model.load_state_dict(pretrained_dict)
             self.input_name = None
 
         elif self.config['model_backend' + self.suffix] == 'onnx':
@@ -368,25 +370,26 @@ class Recognizer:
 
         # create splits
 
+        os.makedirs(self.config["output_dir"], exist_ok=True)
         np.random.seed(splitseed)
         np.random.shuffle(self.all_paired_image_paths)
 
         train_pct, val_pct, test_pct = self.config["train_val_test_split"]
-        train_end_idx = len(self.all_paired_image_paths) * train_pct
-        val_end_idx = len(self.all_paired_image_paths) * (train_pct + val_pct)
+        train_end_idx = int(len(self.all_paired_image_paths) * train_pct)
+        val_end_idx = int(len(self.all_paired_image_paths) * (train_pct + val_pct))
 
         train_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[:train_end_idx]]}
-        train_paired_image_json_path = os.path.join(self.config["output_dir"], f"train_paired_image_paths_json{self.suffix}.json")
+        train_paired_image_json_path = os.path.join(self.config["output_dir"], f"train_paired_image_paths{self.suffix}.json")
         with open(train_paired_image_json_path, "w") as f:
             json.dump(train_paired_image_paths, f)
 
         val_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[train_end_idx:val_end_idx]]}
-        val_paired_image_json_path = os.path.join(self.config["output_dir"], f"val_paired_image_paths_json{self.suffix}.json")
+        val_paired_image_json_path = os.path.join(self.config["output_dir"], f"val_paired_image_paths{self.suffix}.json")
         with open(val_paired_image_json_path, "w") as f:
             json.dump(val_paired_image_paths, f)
 
         test_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[val_end_idx:]]}
-        test_paired_image_json_path = os.path.join(self.config["output_dir"], f"test_paired_image_paths_json{self.suffix}.json")
+        test_paired_image_json_path = os.path.join(self.config["output_dir"], f"test_paired_image_paths{self.suffix}.json")
         with open(test_paired_image_json_path, "w") as f:
             json.dump(test_paired_image_paths, f)
 
@@ -395,7 +398,6 @@ class Recognizer:
         if not self.config["wandb_project"] is None:
             wandb.init(project=self.config["wandb_project"], name=os.path.basename(self.config["output_dir"]))
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        os.makedirs(self.config["output_dir"], exist_ok=True)
 
         # load encoder
 
@@ -542,20 +544,51 @@ class Recognizer:
         # optionally infer hard negatives (turned on by default, highly recommend to facilitate hard negative training)
 
         if not self.config["hardneg_k"] is None:
-            query_paths = [x[0] for x in train_dataset.data if os.path.basename(x[0])]
-            print("Number of query paths: ", len(query_paths))
-            query_paths, query_dataset = self.prepare_hn_query_paths(query_paths, train_dataset, paired_hn=True, image_size=self.config["imsize"])
-            print(f"Num hard neg paths: {len(query_paths)}")    
-            transform = create_paired_transform(self.config["imsize"])
-            self.infer_hardneg_dataset(query_dataset, train_dataset if self.config["finetune"] else render_dataset, best_enc, 
-                os.path.join(self.config["output_dir"], "ref.index"), os.path.join(self.config["output_dir"], "hns.txt"), 
-                k=self.config["hardneg_k"])
+            if self.type == "word":
+                query_paths = [x[0] for x in train_dataset.data if os.path.basename(x[0])]
+                print("Number of query paths: ", len(query_paths))
+                query_paths, query_dataset = self.prepare_hn_query_paths(query_paths, train_dataset, paired_hn=True, image_size=self.config["imsize"])
+                print(f"Num hard neg paths: {len(query_paths)}")    
+                transform = create_paired_transform(self.config["imsize"])
+                self.infer_hardneg_dataset(
+                    query_dataset, 
+                    train_dataset if self.config["finetune"] else render_dataset, 
+                    best_enc, 
+                    os.path.join(self.config["output_dir"], "ref.index"), 
+                    os.path.join(self.config["output_dir"], "hns.txt"), 
+                    k=self.config["hardneg_k"]
+                )
+            else:
+                ## LEGACY
+                query_paths = [x[0] for x in train_dataset.data if os.path.basename(x[0]).startswith("PAIRED")]
+                if len(query_paths) == 0:
+                    print("No explicit training data... constructing hard neg from (unique) synth crops!")
+                    query_path_char_map = defaultdict(list)
+                    query_paths = []
+                    for x in train_dataset.data:
+                        query_path_char_map[os.path.basename(x[0]).split("_")[0]].append(x[0])
+                    for k, v in query_path_char_map.items():
+                        query_paths.append(np.random.choice(v))
+                print(f"Num hard neg paths: {len(query_paths)}")
+                transform = create_paired_transform(self.config["imsize"])
+                self.legacy_infer_hardneg(
+                    query_paths, 
+                    train_dataset if self.config["finetune"] else render_dataset, 
+                    best_enc, 
+                    os.path.join(self.config["output_dir"], "ref.index"), 
+                    transform, os.path.join(self.config["output_dir"], "hns.txt"), 
+                    k=self.config["hardneg_k"], finetune=self.config["finetune"])
             
         # save results of trained model
 
         self.config['index_path' + self.suffix] = os.path.join(self.config["output_dir"], "ref.index")
         self.config['candidates_path' + self.suffix] = os.path.join(self.config["output_dir"], "ref.txt")
         self.config['encoder_path' + self.suffix] = os.path.join(self.config["output_dir"], "enc_best.pth")
+
+        # save post-train config
+
+        with open(os.path.join(self.config["output_dir"], f"post_train_config{self.suffix}.json"), "w") as f:
+            json.dump(self.config, f)
 
     
     def tester_knn(self, test_set, ref_set, model, split, log=False):
@@ -610,7 +643,16 @@ class Recognizer:
             f.write("\n".join(all_nns))
 
 
-    def prepare_hn_query_paths(self, query_paths,train_dataset,paired_hn=True,font_paths=[],max_word_n=40,image_size=224):
+    def prepare_hn_query_paths(
+            self, 
+            query_paths,
+            train_dataset,
+            paired_hn=True,
+            font_paths=[],
+            max_word_n=40,
+            image_size=224
+        ):
+
         if paired_hn:
             query_paths = [x[0] for x in train_dataset.data if "PAIRED" in os.path.basename(x[0])]
         else:
@@ -618,10 +660,9 @@ class Recognizer:
             ###Keep only those paths that contain any of the fonts in font_paths
             query_paths = [x for x in query_paths if any([font in x for font in font_paths])]
 
-
         print("Number of query paths: ", len(query_paths))
-        ###Get the list of directory names from the query_paths
 
+        ###Get the list of directory names from the query_paths
         if paired_hn:
             ##Get paired paths
             query_paths = [x[0] for x in train_dataset.data if "PAIRED" in os.path.basename(x[0])]
@@ -654,7 +695,6 @@ class Recognizer:
                 ##Shuffle the paths
                 np.random.shuffle(word_to_paths[word])
                 max_word_n_paths.extend(word_to_paths[word][:max_word_n])
-
 
         paired_paths = max_word_n_paths
 
@@ -735,6 +775,34 @@ class Recognizer:
         return zs_accuracy
    
 
+    def legacy_infer_hardneg(
+            self,
+            query_paths, 
+            ref_dataset, model, 
+            index_path, transform, 
+            inf_save_path, k=8, finetune=False
+        ):
+
+        knn_func = FaissKNN(index_init_fn=faiss.IndexFlatIP, reset_before=False, reset_after=False)
+        infm = InferenceModel(model, knn_func=knn_func)
+        infm.load_knn_func(index_path)
+        
+        all_nns = []
+        for query_path in query_paths:
+            im = PIL.Image.open(query_path).convert("RGB")
+            query = transform(im).unsqueeze(0)
+            _, indices = infm.get_nearest_neighbors(query, k=k)
+            nn_chars = []
+            for i in indices[0]:
+                path_elements = os.path.basename(ref_dataset.data[i][0]).split("_")
+                nn_chars.append(path_elements[-2] if finetune else path_elements[0])
+            nn_chars = [chr(int(c, base=16)) if c.startswith("0x") else c for c in nn_chars]
+            all_nns.append("".join(nn_chars))
+
+        with open(inf_save_path, 'w') as f:
+            f.write("\n".join(all_nns))
+
+
     @staticmethod
     def save_ref_index(ref_dataset, model, save_path,prefix=""):
 
@@ -744,7 +812,13 @@ class Recognizer:
         infm.train_knn(ref_dataset)
         infm.save_knn_func(os.path.join(save_path, "ref.index"))
 
-        ref_data_file_names = [os.path.basename(x[0]).split("-word-")[1].split(".")[0]  for x in ref_dataset.data]
+        ref_data_file_names = []
+        for x in ref_dataset.data:
+            if os.path.basename(x[0]).startswith("0x"):
+                ## LEGACY
+                ref_data_file_names.append(chr(int(os.path.basename(x[0]).split("_")[0], base=16)))
+            else:
+                ref_data_file_names.append(os.path.basename(x[0]).split("-word-")[1].split(".")[0])
         with open(os.path.join(save_path, f"{prefix}ref.txt"), "w") as f:
             f.write("\n".join(ref_data_file_names))
 

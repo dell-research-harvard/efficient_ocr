@@ -96,7 +96,7 @@ class NoReplacementMPerClassSampler(Sampler):
             j += num_classes_per_batch
             assert len(curr_label_set) == num_classes_per_batch, f"{j}, {len(self.labels)}"
             if j + num_classes_per_batch >= len(self.labels):
-                print(f"All unique labels/classes batched, {len(self.labels)}; restarting...")
+                # print(f"All unique labels/classes batched, {len(self.labels)}; restarting...")
                 c_f.NUMPY_RANDOM.shuffle(self.labels)
                 j = 0
             for label in curr_label_set:

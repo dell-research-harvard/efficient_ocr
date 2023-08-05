@@ -181,6 +181,8 @@ runs/
 # legacy recognizer dir
 
 **/recognizer_training/
-
 .DS_store
 .DS_Store
+tests/effocr/wandb/**
+src/efficient_ocr/__pycache__/**
+tests/effocr/effocr_package_test_locca/**

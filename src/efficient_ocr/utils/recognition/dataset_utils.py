@@ -181,15 +181,15 @@ class MedianPad:
         return padded_image
 
 
-def create_render_transform_char(char_trans_version, size=224):
+def create_render_transform_char(char_trans_version, latin_suggested_augs, size=224):
     if char_trans_version == 4: # V4
         return T.Compose([
             T.ToTensor(),
-            T.RandomErasing(p=0.5, scale=(0.01, 0.01), ratio=(0.3, 3.3), value=255, inplace=False) if lang=="en" else lambda x: x,
-            T.RandomErasing(p=0.25, scale=(0.01, 0.01), ratio=(0.3, 3.3), value=255, inplace=False) if lang=="en" else lambda x: x,
-            T.RandomApply([T.RandomAffine(degrees=2, translate=(0.1, 0.1), scale=(0.9, 1.1), fill=1)], p=0.7) if lang=="en" \
+            T.RandomErasing(p=0.5, scale=(0.01, 0.01), ratio=(0.3, 3.3), value=255, inplace=False) if latin_suggested_augs else lambda x: x,
+            T.RandomErasing(p=0.25, scale=(0.01, 0.01), ratio=(0.3, 3.3), value=255, inplace=False) if latin_suggested_augs else lambda x: x,
+            T.RandomApply([T.RandomAffine(degrees=2, translate=(0.1, 0.1), scale=(0.9, 1.1), fill=1)], p=0.7) if latin_suggested_augs \
                 else T.RandomApply([T.RandomAffine(degrees=0, translate=(0.2, 0.2), scale=(0.8, 1), fill=1)], p=0.7),
-            T.RandomApply([random_erode_dilate], p=0.5) if lang=="en" else lambda x: x,
+            T.RandomApply([random_erode_dilate], p=0.5) if latin_suggested_augs else lambda x: x,
             T.RandomApply([color_shift], p=0.25),
             T.RandomApply([T.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.3, hue=0.3)], p=0.5),
             T.ToPILImage(),
@@ -204,11 +204,11 @@ def create_render_transform_char(char_trans_version, size=224):
     else: # V1
         return T.Compose([
             T.ToTensor(),
-            T.RandomApply([T.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1), fill=1)], p=0.7) if lang=="en" \
+            T.RandomApply([T.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1), fill=1)], p=0.7) if latin_suggested_augs \
                 else T.RandomApply([T.RandomAffine(degrees=0, translate=(0.2, 0.2), scale=(0.8, 1), fill=1)], p=0.7),
             T.RandomApply([color_shift], p=0.25),
             T.RandomApply([T.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.3, hue=0.3)], p=0.5),
-            T.RandomApply([random_erode_dilate], p=0.5) if lang=="en" else lambda x: x,
+            T.RandomApply([random_erode_dilate], p=0.5) if latin_suggested_augs else lambda x: x,
             T.ToPILImage(),
             lambda x: Image.fromarray(A.GaussNoise(var_limit=(10.0, 150.0), mean=0, p=0.25)(image=np.array(x))["image"]),
             T.RandomApply([T.GaussianBlur(11, sigma=(0.1, 2.0))], p=0.3), # T.RandomApply([T.GaussianBlur(15, sigma=(1, 4))], p=0.3)

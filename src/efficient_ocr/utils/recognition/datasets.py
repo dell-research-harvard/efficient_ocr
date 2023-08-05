@@ -118,6 +118,7 @@ def create_dataset(
         finetune=False,
         pretrain=False,
         high_blur=False,
+        latin_suggested_augs=False,
         char_trans_version=4,
         diff_sizes=False,
         imsize=224,
@@ -143,8 +144,9 @@ def create_dataset(
         dataset = FontImageFolder(
             root_dir, 
             render_transform= create_paired_transform_char(size=imsize) if no_aug else \
-                create_render_transform_char(char_trans_version, size=imsize), 
-            paired_transform=create_paired_transform_char(size=imsize) if not aug_paired else create_render_transform_char(char_trans_version, size=imsize) ,
+                create_render_transform_char(char_trans_version, latin_suggested_augs, size=imsize), 
+            paired_transform=create_paired_transform_char(size=imsize) if not aug_paired \
+                else create_render_transform_char(char_trans_version, latin_suggested_augs, size=imsize) ,
             patch_resize=diff_sizes,
         expand_factor=expansion_factor)
     else:
@@ -221,7 +223,7 @@ def create_dataset(
     print("Time to create subsets: ", datetime.now() - start_time)
 
     if train_mode == "character":
-        hn_sampler=HardNegativeClassSamplerWord
+        hn_sampler=HardNegativeClassSamplerChar
         print("Using split batch sampler")
     else:
         print("Using sampler that splits views of the same word into paired and synthetic crops")

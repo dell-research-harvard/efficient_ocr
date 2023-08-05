@@ -128,9 +128,7 @@ class NoReplacementMPerClassSampler(Sampler):
         return self.dataset_len // self.batch_size
 
 
-
-
-class HardNegativeClassSamplerWord(Sampler):
+class HardNegativeClassSamplerChar(Sampler):
 
     def __init__(self, 
             dataset, 
@@ -196,18 +194,6 @@ class HardNegativeClassSamplerWord(Sampler):
                     indices_remaining_dict[label] -= set(randchoice)
                     hn_idx_for_batch.extend(randchoice)
             all_hn_indices.append(hn_idx_for_batch)
-
-        """
-        for bidx in range(0, len(_idx_list), self.batch_size):
-            hnidx = c_f.NUMPY_RANDOM.choice(range(len(all_hn_indices)))
-            _idx_list[bidx:bidx] = all_hn_indices[hnidx]
-        """
-
-        """
-        list_of_lists = [_idx_list[i:i + self.m_per_class] for i in range(0, len(_idx_list), self.m_per_class)]
-        c_f.NUMPY_RANDOM.shuffle(list_of_lists)
-        _idx_list = sum(list_of_lists, [])
-        """
         
         for hni in all_hn_indices:
             ridx = c_f.NUMPY_RANDOM.choice(range(0, len(_idx_list), self.batch_size))
@@ -215,11 +201,7 @@ class HardNegativeClassSamplerWord(Sampler):
 
         print(f"Number of samples in epoch (hard negatives): {len(_idx_list)}")
         
-        return iter(_idx_list)
-    
-
-        
-            
+        return iter(_idx_list) 
 
 
 class AllHNSamplerSplitBatchesPairRender(Sampler):

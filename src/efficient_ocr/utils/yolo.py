@@ -9,6 +9,7 @@ def create_yolo_training_data(coco, target, img_dir = './data/images', output_di
     if target not in ['line', 'localizer']:
         raise NotImplementedError('Only line and localizer targets are supported for coco-yolo conversion')
     
+    
     if type(coco) == str:
         with open(coco, 'r') as infile:
             coco = json.load(infile)
@@ -19,7 +20,7 @@ def create_yolo_training_data(coco, target, img_dir = './data/images', output_di
 
     target_id = None
     for cat in coco['categories']:
-        if cat['name'] == target:
+        if cat['name'] in target:
             target_id = cat['id']
             break
 

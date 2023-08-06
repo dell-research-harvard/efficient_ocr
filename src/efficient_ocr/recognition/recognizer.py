@@ -510,7 +510,7 @@ class Recognizer:
 
         if self.config['Recognizer'][self.type]["test_at_end"]:
             print("Testing on test set...")
-            self.tester_knn(test_dataset, render_dataset, best_enc, "test")
+            self.tester_knn(test_dataset, render_dataset, best_enc, "test", log=not self.config['Global']["wandb_project"] is None)
             print("Test set testing complete.")
 
         # optionally infer hard negatives (turned on by default, highly recommend to facilitate hard negative training)

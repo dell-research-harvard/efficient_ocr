@@ -142,7 +142,6 @@ def create_dataset(
     if pretrain:
         print("Pretraining model!")
 
-
     start_time = datetime.now()
 
     if train_mode == "char":
@@ -151,11 +150,12 @@ def create_dataset(
             root_dir, 
             render_transform= create_paired_transform_char(size=imsize) if no_aug else \
                 create_render_transform_char(char_trans_version, latin_suggested_augs, size=imsize), 
-            paired_transform=create_paired_transform_char(size=imsize) if not aug_paired \
-                else create_render_transform_char(char_trans_version, latin_suggested_augs, size=imsize) ,
+            paired_transform=create_paired_transform_char(size=imsize),
             patch_resize=diff_sizes,
         expand_factor=expansion_factor)
+
     else:
+
         dataset = FontImageFolder(
             root_dir, 
             render_transform= create_paired_transform(size=imsize) if no_aug else \
@@ -163,7 +163,6 @@ def create_dataset(
             paired_transform=create_paired_transform(size=imsize) if not aug_paired else create_render_transform(high_blur, size=imsize) ,
             patch_resize=diff_sizes,
         expand_factor=expansion_factor)
-
 
     end_time = datetime.now()
     print(f"Dataset creation time: {end_time - start_time}")
@@ -228,9 +227,7 @@ def create_dataset(
 
     if train_mode == "char":
         hn_sampler=HardNegativeClassSamplerChar
-        print("Using split batch sampler")
     else:
-        print("Using sampler that splits views of the same word into paired and synthetic crops")
         hn_sampler=AllHNSamplerSplitBatchesPairRender
 
     if hardmined_txt is None:

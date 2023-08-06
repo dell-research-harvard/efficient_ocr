@@ -191,36 +191,41 @@ def draw_word_from_text(text,font,font_size):
     
 
 def process_word_list(path_to_words,subset_N=None):
-    with open(path_to_words, 'r') as f:
-        word_list = f.read().splitlines()
-        word_list = [word.split(' ')[0] for word in word_list]
 
-        if subset_N is not None:
-            word_list=word_list[:subset_N]
+    word_list = []
+    for wl in path_to_words:
+        with open(wl, 'r') as f:
+            word_list = f.read().splitlines()
+            ## LEGACY
+            word_list.extend([word.split(' ')[0] if \
+                              len(word.split(' '))==1 else word.split(' ')[1] for word in word_list])
 
-        ###For all words in the word list, generate 3 versions - lowercase, uppercase, title case
-        word_list_lower = [word.lower() for word in word_list]
-        word_list_upper = [word.upper() for word in word_list]
-        # word_list_title = [word.title() for word in word_list]
-        word_list_title = [word[0].upper() + word[1:].lower() for word in word_list]
+    if subset_N is not None:
+        word_list=word_list[:subset_N]
 
-        ###Arrange the word list such that the lower case words are first, then upper case, then title case and the original order is retained
-        word_list=[]
-        for i in range(0,len(word_list_lower)):
-            word_list.append(word_list_lower[i])
-            word_list.append(word_list_upper[i])
-            word_list.append(word_list_title[i])
-        
-        word_list=list(set(word_list))
+    ###For all words in the word list, generate 3 versions - lowercase, uppercase, title case
+    word_list_lower = [word.lower() for word in word_list]
+    word_list_upper = [word.upper() for word in word_list]
+    # word_list_title = [word.title() for word in word_list]
+    word_list_title = [word[0].upper() + word[1:].lower() for word in word_list]
 
-        ###Remove None
-        word_list = [word for word in word_list if word is not None]
-        ###Remove blanks
-        word_list = [word for word in word_list if word != ' ']
-        ###Remove empty strings
-        word_list = [word for word in word_list if word != '']
+    ###Arrange the word list such that the lower case words are first, then upper case, then title case and the original order is retained
+    word_list=[]
+    for i in range(0,len(word_list_lower)):
+        word_list.append(word_list_lower[i])
+        word_list.append(word_list_upper[i])
+        word_list.append(word_list_title[i])
+    
+    word_list=list(set(word_list))
 
-        return word_list
+    ###Remove None
+    word_list = [word for word in word_list if word is not None]
+    ###Remove blanks
+    word_list = [word for word in word_list if word != ' ']
+    ###Remove empty strings
+    word_list = [word for word in word_list if word != '']
+
+    return word_list
 
  
 def render_save_word_list(word_list, font_paths, coverage_dict, save_path,ascender_char=True):

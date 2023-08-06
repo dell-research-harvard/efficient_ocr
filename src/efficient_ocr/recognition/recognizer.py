@@ -328,11 +328,30 @@ class Recognizer:
         train_end_idx = int(len(self.all_paired_image_paths) * train_pct)
         val_end_idx = int(len(self.all_paired_image_paths) * (train_pct + val_pct))
 
-        train_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[:train_end_idx]]}
-        train_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"train_paired_image_paths.json")
-        with open(train_paired_image_json_path, "w") as f:
-            json.dump(train_paired_image_paths, f)
+        if not self.config['Recognizer'][self.type]['few_shot'] is None:
 
+            cat_path_dict = defaultdict(list)
+            for tp in self.all_paired_image_paths[:train_end_idx]:
+                cat = tp.split('/')[-2]
+                cat_path_dict[cat].append(tp)
+
+            few_shot_paired_image_paths = []
+            for k, v in cat_path_dict.items():
+                few_shot_samples = np.random.choice(v, self.config['Recognizer'][self.type]['few_shot'], replace=False).tolist()
+                few_shot_paired_image_paths.extend([{"file_name": fss} for fss in few_shot_samples])
+
+            train_paired_image_paths = {"images": few_shot_paired_image_paths}
+            train_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"train_paired_image_paths.json")
+            with open(train_paired_image_json_path, "w") as f:
+                json.dump(train_paired_image_paths, f)
+
+        else:
+            
+            train_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[:train_end_idx]]}
+            train_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"train_paired_image_paths.json")
+            with open(train_paired_image_json_path, "w") as f:
+                json.dump(train_paired_image_paths, f)
+            
         val_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[train_end_idx:val_end_idx]]}
         val_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"val_paired_image_paths.json")
         with open(val_paired_image_json_path, "w") as f:

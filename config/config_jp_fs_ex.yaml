@@ -26,7 +26,7 @@ Recognizer:
     temp: 0.1
     start_epoch: 1
     m: 4
-    imsize: 224
+    imsize: 256
     char_trans_version: 1
     hardneg_k: 8
     num_passes: 1

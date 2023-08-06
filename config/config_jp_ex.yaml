@@ -44,5 +44,5 @@ Recognizer:
     char_only_sampler: False
     aug_paired: False
     int_eval_steps:
-    hns_txt_path: ./effocr_package_test_tk_HNS/hns.txt
+    hns_txt_path: ./effocr_package_test_tk/hns.txt
     epoch_viz_dir:

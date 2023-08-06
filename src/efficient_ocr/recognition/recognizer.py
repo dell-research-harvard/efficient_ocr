@@ -13,6 +13,7 @@ import json
 import PIL
 import os
 from glob import glob
+import uuid
 
 import torch
 import torch.nn as nn
@@ -857,9 +858,9 @@ class Recognizer:
     def encode_path_naming_convention(self, image_containing_anno_filename, anno_text):
         file_stem = os.path.splitext(image_containing_anno_filename)[0]
         if self.type == "char":
-            return f"PAIRED-{file_stem}-char-{str_to_ord_str(anno_text)}.png"
+            return f"PAIRED-{file_stem}-{uuid.uuid4()}-char-{str_to_ord_str(anno_text)}.png"
         else:
-            return f"PAIRED-{file_stem}-word-{str_to_ord_str(anno_text)}.png"
+            return f"PAIRED-{file_stem}-{uuid.uuid4()}-word-{str_to_ord_str(anno_text)}.png"
 
  
     def decode_path_naming_convention(self, path_name):

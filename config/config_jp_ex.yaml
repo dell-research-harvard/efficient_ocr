@@ -5,10 +5,10 @@ Global:
 
 Recognizer:
   char:
-    model_output_dir: ./effocr_package_test_tk_HNS
+    model_output_dir: ./effocr_package_test_tk_HNS_mobilenet
     font_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/japan_font_files
     model_backend: timm
-    timm_model_name: edgenext_xx_small.in1k # mobilenetv3_small_050.lamb_in1k
+    timm_model_name: mobilenetv3_small_050.lamb_in1k
     render_dict: 
       - /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/japan_charsets/adobe_1_7_unicodes.txt
       - /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/japan_charsets/jisx0213_unicodes.txt
@@ -26,7 +26,7 @@ Recognizer:
     temp: 0.1
     start_epoch: 1
     m: 4
-    imsize: 256
+    imsize: 224
     char_trans_version: 1
     hardneg_k: 8
     num_passes: 1

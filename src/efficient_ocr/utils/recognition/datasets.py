@@ -134,7 +134,7 @@ def create_dataset(
         k=8,
         aug_paired=False,
         expansion_factor=1,
-        tvt_split=[0.7, 0.15, 0.15]
+        tvt_split=[0.7, 0.15, 0.15],
     ):
 
     if finetune and pretrain:
@@ -188,7 +188,6 @@ def create_dataset(
         os.path.basename(p).split(".")[0] in (val_stems)]
     paired_test_idx =[idx for idx, (p, t) in (enumerate(dataset.data)) if \
         os.path.basename(p).split(".")[0] in (test_stems)]
-    
     paired_train_idx = [idx for idx, (p, t) in (enumerate(dataset.data)) if \
         os.path.basename(p).split(".")[0] in (train_stems)]
     render_idx = [idx for idx, (p, t) in enumerate(dataset.data) if \
@@ -197,7 +196,7 @@ def create_dataset(
     other_idx = [idx for idx, (p, t) in enumerate(dataset.data) if \
         not idx in paired_train_idx + paired_val_idx + paired_test_idx + render_idx]
     
-    if len(other_idx) != 0:
+    if len(other_idx) != 0 and False:
         other_len = len(other_idx)
         other_train_end_idx = int(other_len * tvt_split[0])
         other_val_end_idx = int(other_len * (tvt_split[0]+tvt_split[1]))

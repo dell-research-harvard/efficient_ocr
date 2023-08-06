@@ -346,13 +346,13 @@ class Recognizer:
             else:
                 all_train_paths = self.all_paired_image_paths[:train_end_idx]
 
-            cat_path_dict = defaultdict(list)
+            self.cat_path_dict = defaultdict(list)
             for tp in all_train_paths:
                 cat = tp.split('/')[-2]
-                cat_path_dict[cat].append(tp)
+                self.cat_path_dict[cat].append(tp)
 
             few_shot_paired_image_paths = []
-            for k, v in cat_path_dict.items():
+            for k, v in self.cat_path_dict.items():
                 few_shot_samples = np.random.choice(v, self.config['Recognizer'][self.type]['few_shot'], replace=False).tolist()
                 few_shot_paired_image_paths.extend([{"file_name": fss} for fss in few_shot_samples])
 
@@ -399,6 +399,11 @@ class Recognizer:
         train_paired_image_json_path, \
             val_paired_image_json_path, \
                 test_paired_image_json_path = self._get_train_splits(splitseed=99)
+        
+        if not self.config['Recognizer'][self.type]['few_shot'] is None:
+            with open(train_paired_image_json_path) as f:
+                fs_train_dict = json.load(f)
+                assert len(fs_train_dict['images']) == self.config['Recognizer'][self.type]['few_shot'] * len(self.cat_path_dict.keys()), f"few shot training set size doesn't match expected size, should be {self.config['Recognizer'][self.type]['few_shot'] * len(self.cat_path_dict.keys())}, but is {len(fs_train_dict['images'])}"
 
         # setup
 

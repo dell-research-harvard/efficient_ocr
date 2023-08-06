@@ -4,7 +4,7 @@ def test_recog_train():
 
     data_json = "./coco_annotations_multi/all.json"
     data_dir = './coco_annotations_multi/images'
-    config_yaml = "./config/config_en_datajson.yaml"
+    config_yaml = "../../config/config_en_datajson.yaml"
     
     effocr = EffOCR(
         data_json, data_dir, config_yaml

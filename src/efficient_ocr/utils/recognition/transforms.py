@@ -200,7 +200,7 @@ def create_render_transform_char(char_trans_version, latin_suggested_augs, size=
             lambda x: Image.fromarray(A.GaussNoise(var_limit=(10.0, 150.0), mean=0, p=0.25)(image=np.array(x))["image"]),
             T.RandomApply([T.GaussianBlur(15, sigma=(1, 15))], p=0.3),
             T.RandomGrayscale(p=0.2),
-            MedianPad(override=(255,255,255)),
+            CharMedianPad(override=(255,255,255)),
             T.ToTensor(),
             T.Resize((size, size)),
             T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
@@ -217,7 +217,7 @@ def create_render_transform_char(char_trans_version, latin_suggested_augs, size=
             lambda x: Image.fromarray(A.GaussNoise(var_limit=(10.0, 150.0), mean=0, p=0.25)(image=np.array(x))["image"]),
             T.RandomApply([T.GaussianBlur(11, sigma=(0.1, 2.0))], p=0.3), # T.RandomApply([T.GaussianBlur(15, sigma=(1, 4))], p=0.3)
             T.RandomGrayscale(p=0.2),
-            MedianPad(override=(255,255,255)),
+            CharMedianPad(override=(255,255,255)),
             T.ToTensor(),
             T.Resize((size, size)),
             T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),

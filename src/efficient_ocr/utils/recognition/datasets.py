@@ -9,6 +9,7 @@ from .samplers import *
 from .transforms import *
 from datetime import datetime
 from tqdm import tqdm
+import random
 
 
 def diff_size_collate(batch):
@@ -98,9 +99,9 @@ class FontImageFolder(ImageFolder):
 
         sample = self.loader(path)
 
-        if os.path.basename(path).startswith("PAIRED") and not ("sn-" in os.path.basename(path)) and (
-            self.paired_transform is not None or self.render_transform is not None
-        ):
+        if os.path.basename(path).startswith("PAIRED"):
+            # and not ("sn-" in os.path.basename(path)) and (
+            # self.paired_transform is not None or self.render_transform is not None
             sample = self.paired_transform(sample)
         else:
             sample = self.render_transform(sample)
@@ -133,6 +134,7 @@ def create_dataset(
         k=8,
         aug_paired=False,
         expansion_factor=1,
+        tvt_split=[0.7, 0.15, 0.15]
     ):
 
     if finetune and pretrain:
@@ -192,7 +194,24 @@ def create_dataset(
     render_idx = [idx for idx, (p, t) in enumerate(dataset.data) if \
         not os.path.basename(p).startswith("PAIRED")]
     
+    other_idx = [idx for idx, (p, t) in enumerate(dataset.data) if \
+        not idx in paired_train_idx + paired_val_idx + paired_test_idx + render_idx]
+    
+    if len(other_idx) != 0:
+        other_len = len(other_idx)
+        other_train_end_idx = int(other_len * tvt_split[0])
+        other_val_end_idx = int(other_len * (tvt_split[0]+tvt_split[1]))
+        random.seed(99)
+        other_idx = random.sample(other_idx, other_len)
+        other_train_idx = other_idx[:other_train_end_idx]
+        other_val_idx = other_idx[other_train_end_idx:]
+        other_test_idx = other_idx[other_val_end_idx:]
+        paired_train_idx += other_train_idx
+        paired_val_idx += other_val_idx
+        paired_test_idx += other_test_idx
+    
     print("total render idx: ", len(render_idx))
+    print("total other idx: ", len(other_idx))
 
     train_stems = list(train_stems)
 

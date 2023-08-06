@@ -418,6 +418,7 @@ class Recognizer:
                 k=self.config['Recognizer'][self.type]["hardneg_k"],
                 aug_paired=self.config['Recognizer'][self.type]["aug_paired"],
                 expansion_factor=self.config['Recognizer'][self.type]["expansion_factor"],
+                tvt_split=self.config['Recognizer'][self.type]["tvt_split"]
         )
 
         render_dataset = create_render_dataset(
@@ -479,6 +480,7 @@ class Recognizer:
                 zs_accuracy=best_acc if best_acc != None else 0,
                 wandb_log=not self.config['Global']["wandb_project"] is None
             )
+            
             acc = self.tester_knn(
                 val_dataset, 
                 render_dataset, 
@@ -722,7 +724,7 @@ class Recognizer:
                     print("Intermediate accuracy: ",acc)
                     if wandb_log:
                         wandb.log({f"val/{self.type}/acc": acc})
-                    if acc>zs_accuracy:
+                    if acc > zs_accuracy:
                         self.save_model(self.config['Recognizer'][self.type]["model_output_dir"], model, "best_cer", self.datapara)
                         zs_accuracy=acc
 

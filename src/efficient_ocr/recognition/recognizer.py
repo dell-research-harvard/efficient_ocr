@@ -245,6 +245,8 @@ class Recognizer:
         Transcriptions are currently being passed along with file names
         """
 
+        os.makedirs(self.config['Recognizer'][self.type]["model_output_dir"], exist_ok=True)
+
         if self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"] is None:
 
             # create training data folder

@@ -252,15 +252,10 @@ class Recognizer:
             self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"] = \
                 os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "training_data")
 
-            # open data json in coco format
-
-            with open(data_json) as f:
-                data_dict = json.load(f)
-
             # extract important metadata
 
-            cat_catid_dict = {entry["name"]:entry["id"] for entry in data_dict["categories"]}
-            imageid_filename_dict = {x["id"]:x["file_name"] for x in data_dict["images"]}
+            cat_catid_dict = {entry["name"]:entry["id"] for entry in data_json["categories"]}
+            imageid_filename_dict = {x["id"]:x["file_name"] for x in data_json["images"]}
 
             try:
                 type_catid = cat_catid_dict[self.type]
@@ -273,7 +268,7 @@ class Recognizer:
             self.anno_crop_and_text_dict = defaultdict(list)
 
             print("Preparing training data...")
-            for anno in tqdm(data_dict["annotations"]):
+            for anno in tqdm(data_json["annotations"]):
                 if anno["category_id"] == type_catid:
                     image_containing_anno_filename = imageid_filename_dict[anno["image_id"]]
                     image_containing_anno_path = os.path.join(data_dir, image_containing_anno_filename)

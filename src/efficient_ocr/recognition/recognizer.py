@@ -430,7 +430,7 @@ class Recognizer:
         
         ##Log 
         if not self.config['Global']["wandb_project"] is None:
-            wandb.log({"val/acc": best_acc})
+            wandb.log({f"val/{self.type}/acc": best_acc})
 
         # set  schedule
 
@@ -469,7 +469,7 @@ class Recognizer:
             
             ##Log
             if not self.config['Global']["wandb_project"] is None:
-                wandb.log({"val/acc": acc})
+                wandb.log({f"val/{self.type}/acc": acc})
 
             if acc >= best_acc:
                 best_acc = acc
@@ -481,7 +481,7 @@ class Recognizer:
                     scheduler.step()
                     ###Log on wandb
                     if not self.config['Global']["wandb_project"] is None:
-                        wandb.log({"train/lr": scheduler.get_last_lr()[0]})
+                        wandb.log({f"train/{self.type}/lr": scheduler.get_last_lr()[0]})
 
         ## test with best encoder
 
@@ -500,7 +500,8 @@ class Recognizer:
             if self.type == "word":
                 query_paths = [x[0] for x in train_dataset.data if os.path.basename(x[0])]
                 print("Number of query paths: ", len(query_paths))
-                query_paths, query_dataset = self.prepare_hn_query_paths(query_paths, train_dataset, paired_hn=True, image_size=self.config["imsize"])
+                query_paths, query_dataset = self.prepare_hn_query_paths(
+                    query_paths, train_dataset, paired_hn=True, image_size=self.config['Recognizer'][self.type]["imsize"])
                 print(f"Num hard neg paths: {len(query_paths)}")    
                 transform = create_paired_transform(self.config['Recognizer'][self.type]["imsize"])
                 self.infer_hardneg_dataset(
@@ -560,7 +561,7 @@ class Recognizer:
 
         ##Log the accuracy
         if log:
-            wandb.log({f"{split}/accuracy": prec_1})
+            wandb.log({f"{split}/{self.type}/accuracy": prec_1})
         print(f"Accuracy on {split} set (Precision@1) = {prec_1}")
         return prec_1
    
@@ -694,14 +695,14 @@ class Recognizer:
             optimizer.step()
 
             if wandb_log:
-                wandb.log({"train/loss": loss.item()})
+                wandb.log({f"train/{self.type}/loss": loss.item()})
 
             if not int_eval_steps is None:
                 if batch_idx % int_eval_steps == 0:
                     acc = self.tester_knn(val_dataset, render_dataset, model, "val", log=wandb_log)
                     print("Intermediate accuracy: ",acc)
                     if wandb_log:
-                        wandb.log({"val/acc": acc})
+                        wandb.log({f"val/{self.type}/acc": acc})
                     if acc>zs_accuracy:
                         self.save_model(self.config['Recognizer'][self.type]["output_dir"], model, "best_cer", self.datapara)
                         zs_accuracy=acc
@@ -719,7 +720,7 @@ class Recognizer:
             if not scheduler is None:
                 scheduler.step()
                 if wandb_log:
-                    wandb.log({"train/lr": scheduler.get_lr()[0]})
+                    wandb.log({f"train/{self.type}/lr": scheduler.get_lr()[0]})
 
         return zs_accuracy
    

@@ -341,8 +341,13 @@ class Recognizer:
 
         if not self.config['Recognizer'][self.type]['few_shot'] is None:
 
+            if not self.config['Recognizer'][self.type]['train_set_from_coco_json'] is None:
+                all_train_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['train_set_from_coco_json'])
+            else:
+                all_train_paths = self.all_paired_image_paths[:train_end_idx]
+
             cat_path_dict = defaultdict(list)
-            for tp in self.all_paired_image_paths[:train_end_idx]:
+            for tp in all_train_paths:
                 cat = tp.split('/')[-2]
                 cat_path_dict[cat].append(tp)
 

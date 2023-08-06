@@ -3,6 +3,7 @@ EffOCR Main Class
 '''
 import json
 import numpy as np
+import yaml
 import os
 import cv2
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
@@ -10,47 +11,63 @@ from ..recognition import Recognizer, infer_last_chars, infer_words, infer_chars
 from ..detection import LineModel, LocalizerModel # , word_model, char_model
 from ..utils import make_coco_from_effocr_result, visualize_effocr_result
 
+
 class EffOCRResult:
 
     def __init__(self, full_text, result):
         self.text = full_text
         self.preds = result
 
+
 class EffOCR:
 
-    def __init__(self, data_json, config_json, **kwargs):
+
+    def __init__(self, data_json, data_dir, config_yaml, **kwargs):
 
         self.training_funcs = {'line_detection': self._train_line,
                                 'word_and_character_detection': self._train_localizer,
                                 'word_recognition': self._train_word_recognizer,
                                 'char_recognition': self._train_char_recognizer}
         
-        
         with open(data_json, 'r') as f:
             self.data_json = json.load(f)
 
-        self.config = self._load_config(config_json)
+        self.data_dir = data_dir
+        self.config = self._load_config(config_yaml)
 
-        self.line_model = self._initialize_line()
-        self.localizer_model = self._initialize_localizer()
-        self.word_model = self._initialize_word_recognizer()
-        self.char_model = self._initialize_char_recognizer()
-
-    def _load_config(self, config_json, **kwargs):
-        if isinstance(config_json, str):
-            with open(config_json, 'r') as f:
-                config = json.load(f)
-        elif isinstance(config_json, dict):
-            config = config_json
+        if self.config['Recognizer']['char_only'] and self.config['Global']['recognition_only']:
+            self.char_model = self._initialize_char_recognizer()
+        elif self.config['Global']['recognition_only']:
+            self.word_model = self._initialize_word_recognizer()
+            self.char_model = self._initialize_char_recognizer()
+        elif self.config['Recognizer']['char_only']:
+            self.char_model = self._initialize_char_recognizer()
+            self.line_model = self._initialize_line()
+            self.localizer_model = self._initialize_localizer()
         else:
-            raise ValueError('config_json must be a path to a json file or a dictionary')
+            self.word_model = self._initialize_word_recognizer()
+            self.char_model = self._initialize_char_recognizer()
+            self.line_model = self._initialize_line()
+            self.localizer_model = self._initialize_localizer()
         
+
+    def _load_config(self, config_yaml, **kwargs):
+        if isinstance(config_yaml, str):
+            with open(config_yaml, 'r') as f:
+                config = yaml.safe_load(f)
+        elif isinstance(config_yaml, dict):
+            config = config_yaml
+        else:
+            raise ValueError('config_yaml must be a path to a yaml file or a dictionary')
+        
+        # TODO protocol for updating dictionary at arbitrary depth
         if kwargs:
             for k, v in kwargs.items():
-                config[k] = v
+                config['Global'][k] = v
         
         return config
     
+
     def _load_and_format_images(self, imgs):
         if all([isinstance(img, str) for img in imgs]):
             imgs = [cv2.imread(img) for img in imgs]
@@ -58,6 +75,7 @@ class EffOCR:
             pass
         return imgs
     
+
     def _postprocess(self, results, **kwargs):
         full_results = [None] * len(results.keys())
         for bbox_idx in results.keys():
@@ -66,6 +84,7 @@ class EffOCR:
             full_results[bbox_idx] = EffOCRResult(full_text, results[bbox_idx])
 
         return full_results
+
 
     def train(self, target = None, **kwargs):
         
@@ -82,21 +101,21 @@ class EffOCR:
             else:
                 self.training_funcs[t](**kwargs)
 
-    ### TOM
+
     def _train_line(self, **kwargs):
         self.line_model.train(self.data_json, **kwargs)
 
-    ### TOM (and Jake)
+
     def _train_localizer(self, **kwargs):
         self.localizer_model.train(self.data_json, **kwargs)
 
-    ### ABHISHEK (and Jake)
-    def _train_word_recognizer(self, **kwargs):
-        self.word_model = train_word(self.word_model, self.data_json, self.config, **kwargs)
 
-    ### JAKE
+    def _train_word_recognizer(self, **kwargs):
+        self.word_model.train(self.data_json, self.data_dir, **kwargs)
+
+
     def _train_char_recognizer(self, **kwargs):
-        self.char_model = train_char(self.char_model, self.data_json, self.config, **kwargs)
+        self.char_model.train(self.data_json, self.data_dir, **kwargs)
 
     
     ### TOM
@@ -301,4 +320,3 @@ class EffOCR:
     def _initialize_char_recognizer(self):
         return Recognizer(self.config, 'char')
     
-

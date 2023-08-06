@@ -177,3 +177,13 @@ tests/fixtures/localizer/
 # yolo results
 runs/
 *.png
+
+# legacy recognizer dir
+
+**/recognizer_training/
+.DS_store
+.DS_Store
+tests/effocr/wandb/**
+src/efficient_ocr/__pycache__/**
+tests/effocr/effocr_package_test_locca_char*/**
+tests/effocr/effocr_package_test_locca_word*/**

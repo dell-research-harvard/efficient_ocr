@@ -1,12 +1,9 @@
 ####Create crops given a word list
 
+# Generate words using words from a list (dictionary/place names)
 
-# %% Generate words using words from a list (dictionary/place names)
-from tkinter import HORIZONTAL, font
-from numpy.lib.function_base import kaiser
 import torchvision.transforms as T
 import numpy as np
-import pandas as pd
 import os
 from tqdm import tqdm
 
@@ -14,16 +11,13 @@ from PIL import ImageOps, Image, ImageFont, ImageDraw
 import os
 from tqdm import tqdm
 import json
-
-from fontTools.unicode import Unicode
-import json
 from glob import glob
-from collections import defaultdict
 from fontTools.ttLib import TTFont
 import multiprocessing as mp
 from torch import nn
 
 ####Font utils
+
 
 def word_code_to_string(word_code):
 
@@ -34,9 +28,6 @@ def word_code_to_string(word_code):
     else:
         return "".join([chr(int(char)) for char in split_code])
 
-
-
-     
 
 def string_to_word_code(word_string):
     return "_".join([str(ord(char)) for char in word_string])
@@ -57,6 +48,7 @@ def load_chars(path):
         uni = f.read().split("\n")
     return [u.split("\t") for u in uni]
 
+
 def get_unicode_chars_font(font_file_path):
     """Get all unicode characters in a font file"""
     font = TTFont(font_file_path, fontNumber=0)
@@ -71,6 +63,8 @@ def get_unicode_chars_font(font_file_path):
 
 
 ####Render chars
+
+
 def render_seg(font_paths, save_path, font_path_id, random_chars_and_spaces, rand_size,ascender_char=True): # You can change the imid into folder id
     # make the folders for this iteration of one font_path_id, you can also iterate over font_path_id inside render_seg
 
@@ -147,7 +141,6 @@ def draw_single_char(ch, font, canvas_size, padding=0.):
     return img
 
 
-
 def draw_single_char_ascender(ch, font, canvas_size, padding=0.):
     canvas_width, canvas_height = (canvas_size * 5, canvas_size * 5)
     img = Image.new('RGB', (canvas_width, canvas_height), (0, 0, 0))
@@ -162,7 +155,6 @@ def draw_single_char_ascender(ch, font, canvas_size, padding=0.):
     x0, y0, x1, h = x0-(hdist*padding), y0-(vdist*padding), x1+(hdist*padding), h+(vdist*padding)
     uninverted_image = img.crop((x0, 0, x1, h))
     return ImageOps.invert(uninverted_image)
-
 
 
 def draw_word_from_text(text,font,font_size):
@@ -199,40 +191,43 @@ def draw_word_from_text(text,font,font_size):
     
 
 def process_word_list(path_to_words,subset_N=None):
-    with open(path_to_words, 'r') as f:
-        word_list = f.read().splitlines()
-        word_list = [word.split(' ')[0] for word in word_list]
 
-        if subset_N is not None:
-            word_list=word_list[:subset_N]
+    word_list = []
+    for wl in path_to_words:
+        with open(wl, 'r') as f:
+            word_list = f.read().splitlines()
+            ## LEGACY
+            word_list.extend([word.split(' ')[0] if \
+                              len(word.split(' '))==1 else word.split(' ')[1] for word in word_list])
 
-        ###For all words in the word list, generate 3 versions - lowercase, uppercase, title case
-        word_list_lower = [word.lower() for word in word_list]
-        word_list_upper = [word.upper() for word in word_list]
-        # word_list_title = [word.title() for word in word_list]
-        word_list_title = [word[0].upper() + word[1:].lower() for word in word_list]
+    if subset_N is not None:
+        word_list=word_list[:subset_N]
 
+    ###For all words in the word list, generate 3 versions - lowercase, uppercase, title case
+    word_list_lower = [word.lower() for word in word_list]
+    word_list_upper = [word.upper() for word in word_list]
+    # word_list_title = [word.title() for word in word_list]
+    word_list_title = [word[0].upper() + word[1:].lower() for word in word_list]
 
-
-        ###Arrange the word list such that the lower case words are first, then upper case, then title case and the original order is retained
-        word_list=[]
-        for i in range(0,len(word_list_lower)):
-            word_list.append(word_list_lower[i])
-            word_list.append(word_list_upper[i])
-            word_list.append(word_list_title[i])
-        
-
-        word_list=list(set(word_list))
-
-        ###Remove None
-        word_list = [word for word in word_list if word is not None]
-        ###Remove blanks
-        word_list = [word for word in word_list if word != ' ']
-        ###Remove empty strings
-        word_list = [word for word in word_list if word != '']
-
-        return word_list
+    ###Arrange the word list such that the lower case words are first, then upper case, then title case and the original order is retained
+    word_list=[]
+    for i in range(0,len(word_list_lower)):
+        word_list.append(word_list_lower[i])
+        word_list.append(word_list_upper[i])
+        word_list.append(word_list_title[i])
     
+    word_list=list(set(word_list))
+
+    ###Remove None
+    word_list = [word for word in word_list if word is not None]
+    ###Remove blanks
+    word_list = [word for word in word_list if word != ' ']
+    ###Remove empty strings
+    word_list = [word for word in word_list if word != '']
+
+    return word_list
+
+ 
 def render_save_word_list(word_list, font_paths, coverage_dict, save_path,ascender_char=True):
     word_list_covered = []
     for word in word_list:
@@ -249,6 +244,7 @@ def render_save_word_list(word_list, font_paths, coverage_dict, save_path,ascend
             image_name_H, rimg_H = render_seg(font_paths, save_path, font_path_id, word, rand_size,ascender_char=ascender_char)
             word_list_covered.append(word)
     return word_list_covered  
+
 
 def parallel_render_save_word_list(word_list, font_paths, coverage_dict, save_path, num_processes=4,ascender_char=True):
     
@@ -278,7 +274,6 @@ def parallel_render_save_word_list(word_list, font_paths, coverage_dict, save_pa
     return word_list_covered
 
 
-
 def render_all_synth_in_parallel(
         save_path:str,
         font_dir:list,
@@ -297,8 +292,7 @@ def render_all_synth_in_parallel(
     
     ##All font paths
     font_paths = glob(font_dir+"/*.ttf")
-    font_paths=sorted(font_paths)
-    # font_paths=font_paths[0:9]+font_paths[16:] #Internal use only
+    font_paths = sorted(font_paths)
 
     char_list   = []
     for font_path in tqdm(font_paths):
@@ -307,8 +301,6 @@ def render_all_synth_in_parallel(
 
     char_list=list(set(char_list))
 
-
-
     coverage_dict = {}
     for font_path in tqdm(font_paths):
         covered_chars = get_unicode_chars_font(font_path)
@@ -316,19 +308,27 @@ def render_all_synth_in_parallel(
         coverage_dict[font_path] = covered_chars_kanji_plus
     with open("/".join(save_path.split("/")[:-1])+"/coverage_dict.json",'w') as f:
         json.dump(coverage_dict,f,ensure_ascii=False)
+
     # I think the coverage_dict is enough to get the correct chars. 
     ###Keep only those characters in char list that are covered by at least 1 font
+
     char_list = list(set(char_list))
     char_list = [char for char in char_list if sum([char in coverage_dict[font_path] for font_path in coverage_dict])>=1]
+    
     ###Write the wods from a dir to a txt file
     ##GEn symspell words
+   
     words_to_generate=process_word_list(path_to_words=word_list_path) 
     print("processes word list")
+    
     # covered_symspell=render_save_word_list(symspell_words)
-    covered_symspell=parallel_render_save_word_list(words_to_generate, font_paths, coverage_dict, save_path, num_processes=None,ascender_char=ascender_char)
+    covered_symspell=parallel_render_save_word_list(
+        words_to_generate, font_paths, coverage_dict, save_path, num_processes=None,ascender_char=ascender_char)
+    
     ###Now, we need to add the words that are in labels but not in the word list. 
     print(len(covered_symspell), " images generated")
-    
+
+
 # if __name__ == '__main__':
 
 #     # Change the path to CGIS

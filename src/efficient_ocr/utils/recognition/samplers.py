@@ -21,6 +21,7 @@ def get_label_to_paths(dataset):
     
     return labels_to_paths
 
+
 def get_label_to_paired_unpaired_indices(dataset):
     labels = set(dataset.targets)
     targets_dict = dataset.subsetted_targets_dict 
@@ -54,10 +55,6 @@ def get_label_to_paired_unpaired_indices(dataset):
 
     
     return label_to_paired_indices, label_to_unpaired_indices
-
-
-
-
 
 
 class NoReplacementMPerClassSampler(Sampler):
@@ -99,7 +96,7 @@ class NoReplacementMPerClassSampler(Sampler):
             j += num_classes_per_batch
             assert len(curr_label_set) == num_classes_per_batch, f"{j}, {len(self.labels)}"
             if j + num_classes_per_batch >= len(self.labels):
-                print(f"All unique labels/classes batched, {len(self.labels)}; restarting...")
+                # print(f"All unique labels/classes batched, {len(self.labels)}; restarting...")
                 c_f.NUMPY_RANDOM.shuffle(self.labels)
                 j = 0
             for label in curr_label_set:
@@ -128,9 +125,7 @@ class NoReplacementMPerClassSampler(Sampler):
         return self.dataset_len // self.batch_size
 
 
-
-
-class HardNegativeClassSamplerWord(Sampler):
+class HardNegativeClassSamplerChar(Sampler):
 
     def __init__(self, 
             dataset, 
@@ -196,18 +191,6 @@ class HardNegativeClassSamplerWord(Sampler):
                     indices_remaining_dict[label] -= set(randchoice)
                     hn_idx_for_batch.extend(randchoice)
             all_hn_indices.append(hn_idx_for_batch)
-
-        """
-        for bidx in range(0, len(_idx_list), self.batch_size):
-            hnidx = c_f.NUMPY_RANDOM.choice(range(len(all_hn_indices)))
-            _idx_list[bidx:bidx] = all_hn_indices[hnidx]
-        """
-
-        """
-        list_of_lists = [_idx_list[i:i + self.m_per_class] for i in range(0, len(_idx_list), self.m_per_class)]
-        c_f.NUMPY_RANDOM.shuffle(list_of_lists)
-        _idx_list = sum(list_of_lists, [])
-        """
         
         for hni in all_hn_indices:
             ridx = c_f.NUMPY_RANDOM.choice(range(0, len(_idx_list), self.batch_size))
@@ -215,11 +198,7 @@ class HardNegativeClassSamplerWord(Sampler):
 
         print(f"Number of samples in epoch (hard negatives): {len(_idx_list)}")
         
-        return iter(_idx_list)
-    
-
-        
-            
+        return iter(_idx_list) 
 
 
 class AllHNSamplerSplitBatchesPairRender(Sampler):
@@ -383,3 +362,4 @@ class AllHNSamplerSplitBatchesPairRender(Sampler):
         print("Number of batches", len(_idx_list)/self.batch_size)
 
         return iter(_idx_list)
+

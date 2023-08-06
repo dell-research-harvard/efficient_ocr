@@ -353,7 +353,7 @@ class Recognizer:
 
             few_shot_paired_image_paths = []
             for k, v in self.cat_path_dict.items():
-                few_shot_samples = np.random.choice(v, self.config['Recognizer'][self.type]['few_shot'], replace=False).tolist()
+                few_shot_samples = np.random.choice(v, min(len(v), self.config['Recognizer'][self.type]['few_shot']), replace=False).tolist()
                 few_shot_paired_image_paths.extend([{"file_name": fss} for fss in few_shot_samples])
 
             train_paired_image_paths = {"images": few_shot_paired_image_paths}

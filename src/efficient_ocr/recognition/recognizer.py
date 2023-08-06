@@ -345,10 +345,11 @@ class Recognizer:
 
         else:
 
+            # train
             if not self.config['Recognizer'][self.type]['train_set_from_coco_json'] is None:
                 with open(self.config['Recognizer'][self.type]['train_set_from_coco_json'], 'r') as f:
                     train_coco = json.load(f)
-                    train_coco_file_names = set([x['file_name'] for x in train_coco['images']])
+                    train_coco_file_names = [os.path.splitext(x['file_name'])[0]  for x in train_coco['images']]
                     train_paired_image_paths = \
                         {"images": [{"file_name": x} for x in self.all_paired_image_paths if \
                                     any(os.path.basename(x).startswith('PAIRED_'+y) or os.path.basename(x).startswith('PAIRED-'+y) for y in train_coco_file_names)]}
@@ -358,10 +359,11 @@ class Recognizer:
             with open(train_paired_image_json_path, "w") as f:
                 json.dump(train_paired_image_paths, f)
             
+        # val
         if not self.config['Recognizer'][self.type]['val_set_from_coco_json'] is None:
             with open(self.config['Recognizer'][self.type]['val_set_from_coco_json'], 'r') as f:
                 val_coco = json.load(f)
-                val_coco_file_names = set([x['file_name'] for x in val_coco['images']])
+                val_coco_file_names = [os.path.splitext(x['file_name'])[0]  for x in val_coco['images']]
                 val_paired_image_paths = \
                     {"images": [{"file_name": x} for x in self.all_paired_image_paths if \
                                 any(os.path.basename(x).startswith('PAIRED_'+y) or os.path.basename(x).startswith('PAIRED-'+y) for y in val_coco_file_names)]}
@@ -371,10 +373,11 @@ class Recognizer:
         with open(val_paired_image_json_path, "w") as f:
             json.dump(val_paired_image_paths, f)
 
+        # test
         if not self.config['Recognizer'][self.type]['test_set_from_coco_json'] is None:
             with open(self.config['Recognizer'][self.type]['test_set_from_coco_json'], 'r') as f:
                 test_coco = json.load(f)
-                test_coco_file_names = set([x['file_name'] for x in test_coco['images']])
+                test_coco_file_names = [os.path.splitext(x['file_name'])[0] for x in test_coco['images']]
                 test_paired_image_paths = \
                     {"images": [{"file_name": x} for x in self.all_paired_image_paths if \
                                 any(os.path.basename(x).startswith('PAIRED_'+y) or os.path.basename(x).startswith('PAIRED-'+y) for y in test_coco_file_names)]}

@@ -418,7 +418,7 @@ class Recognizer:
                 k=self.config['Recognizer'][self.type]["hardneg_k"],
                 aug_paired=self.config['Recognizer'][self.type]["aug_paired"],
                 expansion_factor=self.config['Recognizer'][self.type]["expansion_factor"],
-                tvt_split=self.config['Recognizer'][self.type]["tvt_split"]
+                tvt_split=self.config['Recognizer'][self.type]["train_val_test_split"]
         )
 
         render_dataset = create_render_dataset(
@@ -480,7 +480,7 @@ class Recognizer:
                 zs_accuracy=best_acc if best_acc != None else 0,
                 wandb_log=not self.config['Global']["wandb_project"] is None
             )
-            
+
             acc = self.tester_knn(
                 val_dataset, 
                 render_dataset, 

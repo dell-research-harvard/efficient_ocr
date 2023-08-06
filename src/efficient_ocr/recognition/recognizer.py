@@ -316,6 +316,19 @@ class Recognizer:
             self.all_paired_image_paths = glob(os.path.join(self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"], "**", "PAIRED*"), recursive=True)
 
 
+    def _paths_from_coco_json(self, coco_json_path):
+        with open(coco_json_path, 'r') as f:
+            coco = json.load(f)
+            coco_file_names = [os.path.splitext(x['file_name'])[0]  for x in coco['images']]
+            paired_image_paths = \
+                {"images": [{"file_name": x} for x in self.all_paired_image_paths if \
+                            any(os.path.basename(x).startswith('PAIRED_'+y+"_") or \
+                                os.path.basename(x).startswith('PAIRED-'+y+"_") or \
+                                os.path.basename(x).startswith('PAIRED_'+y+"-") or \
+                                os.path.basename(x).startswith('PAIRED-'+y+"-") for y in coco_file_names)]}
+        return paired_image_paths
+
+
     def _get_train_splits(self, splitseed=99):
 
         os.makedirs(self.config['Recognizer'][self.type]["model_output_dir"], exist_ok=True)
@@ -347,12 +360,7 @@ class Recognizer:
 
             # train
             if not self.config['Recognizer'][self.type]['train_set_from_coco_json'] is None:
-                with open(self.config['Recognizer'][self.type]['train_set_from_coco_json'], 'r') as f:
-                    train_coco = json.load(f)
-                    train_coco_file_names = [os.path.splitext(x['file_name'])[0]  for x in train_coco['images']]
-                    train_paired_image_paths = \
-                        {"images": [{"file_name": x} for x in self.all_paired_image_paths if \
-                                    any(os.path.basename(x).startswith('PAIRED_'+y+"_") or os.path.basename(x).startswith('PAIRED-'+y+"_") for y in train_coco_file_names)]}
+                train_paired_image_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['train_set_from_coco_json'])
             else:
                 train_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[:train_end_idx]]}
             train_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"train_paired_image_paths.json")
@@ -361,12 +369,7 @@ class Recognizer:
             
         # val
         if not self.config['Recognizer'][self.type]['val_set_from_coco_json'] is None:
-            with open(self.config['Recognizer'][self.type]['val_set_from_coco_json'], 'r') as f:
-                val_coco = json.load(f)
-                val_coco_file_names = [os.path.splitext(x['file_name'])[0]  for x in val_coco['images']]
-                val_paired_image_paths = \
-                    {"images": [{"file_name": x} for x in self.all_paired_image_paths if \
-                                any(os.path.basename(x).startswith('PAIRED_'+y+"_") or os.path.basename(x).startswith('PAIRED-'+y+"_") for y in val_coco_file_names)]}
+            val_paired_image_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['val_set_from_coco_json'])
         else:
             val_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[train_end_idx:val_end_idx]]}
         val_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"val_paired_image_paths.json")
@@ -375,12 +378,7 @@ class Recognizer:
 
         # test
         if not self.config['Recognizer'][self.type]['test_set_from_coco_json'] is None:
-            with open(self.config['Recognizer'][self.type]['test_set_from_coco_json'], 'r') as f:
-                test_coco = json.load(f)
-                test_coco_file_names = [os.path.splitext(x['file_name'])[0] for x in test_coco['images']]
-                test_paired_image_paths = \
-                    {"images": [{"file_name": x} for x in self.all_paired_image_paths if \
-                                any(os.path.basename(x).startswith('PAIRED_'+y+"_") or os.path.basename(x).startswith('PAIRED-'+y+"_") for y in test_coco_file_names)]}
+            test_paired_image_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['test_set_from_coco_json'])
         else:
             test_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[val_end_idx:]]}
         test_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"test_paired_image_paths.json")

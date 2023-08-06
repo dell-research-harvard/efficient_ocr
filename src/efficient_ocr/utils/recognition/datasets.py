@@ -244,23 +244,25 @@ def create_dataset(
     print(f"Len train dataset: {len(train_dataset)}")
     print("Time to create subsets: ", datetime.now() - start_time)
 
-    if train_mode == "char":
-        hn_sampler=HardNegativeClassSamplerChar
-    else:
-        hn_sampler=AllHNSamplerSplitBatchesPairRender
-
     if hardmined_txt is None:
         train_sampler = NoReplacementMPerClassSampler(
             train_dataset, m=m, batch_size=batch_size, num_passes=num_passes
         )
     else:
         print("Using hard negatives!")
+
         with open(hardmined_txt) as f:
             hard_negatives = f.read().split("\n")
             print(f"Len hard negatives: {len(hard_negatives)}")
-            train_sampler = hn_sampler(train_dataset, 
-                train_dataset.class_to_idx, hns_set_size=k, m=m, batch_size=batch_size, 
-                num_passes=num_passes)
+            if train_mode == "char":
+                train_sampler = HardNegativeClassSamplerChar(train_dataset, 
+                    train_dataset.class_to_idx, hard_negatives, m=m, batch_size=batch_size, 
+                    num_passes=num_passes
+                )
+            else:
+                train_sampler = AllHNSamplerSplitBatchesPairRender(train_dataset, 
+                    train_dataset.class_to_idx, hns_set_size=k, m=m, batch_size=batch_size, 
+                    num_passes=num_passes)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, shuffle=False,

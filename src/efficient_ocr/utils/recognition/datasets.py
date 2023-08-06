@@ -99,9 +99,9 @@ class FontImageFolder(ImageFolder):
 
         sample = self.loader(path)
 
-        if os.path.basename(path).startswith("PAIRED"):
-            # and not ("sn-" in os.path.basename(path)) and (
-            # self.paired_transform is not None or self.render_transform is not None
+        if os.path.basename(path).startswith("PAIRED") and not ("sn-" in os.path.basename(path)) and (
+            self.paired_transform is not None or self.render_transform is not None
+        ):
             sample = self.paired_transform(sample)
         else:
             sample = self.render_transform(sample)

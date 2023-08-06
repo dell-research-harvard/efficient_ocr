@@ -254,6 +254,7 @@ def create_dataset(
             train_dataset, m=m, batch_size=batch_size, num_passes=num_passes
         )
     else:
+        print("Using hard negatives!")
         with open(hardmined_txt) as f:
             hard_negatives = f.read().split("\n")
             print(f"Len hard negatives: {len(hard_negatives)}")
@@ -261,27 +262,25 @@ def create_dataset(
                 train_dataset.class_to_idx, hns_set_size=k, m=m, batch_size=batch_size, 
                 num_passes=num_passes)
 
-
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, shuffle=False,
         num_workers=16, pin_memory=True, drop_last=True, 
         sampler=train_sampler, collate_fn=diff_size_collate if diff_sizes else None)
+    
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=batch_size, shuffle=True,
         num_workers=16, pin_memory=True, drop_last=False,
         collate_fn=diff_size_collate if diff_sizes else None)
+    
     test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=batch_size, shuffle=True,
         num_workers=16, pin_memory=True, drop_last=False,
         collate_fn=diff_size_collate if diff_sizes else None)
 
-
-    
     print("Time to create dataloaders: ", datetime.now() - start_time)
 
     print("Train dataset size: ", len(train_dataset))
 
-    
     return train_dataset, val_dataset, test_dataset, train_loader, val_loader, test_loader, train_loader.sampler.nbatches  if (hardmined_txt!=None and train_mode=="word") else None
 
 

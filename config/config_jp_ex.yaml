@@ -22,7 +22,7 @@ Recognizer:
     adamw_beta1: 0.9
     adamw_beta2: 0.999
     weight_decay: 5.0e-4
-    num_epochs: 10
+    num_epochs: 20
     temp: 0.1
     start_epoch: 1
     m: 4

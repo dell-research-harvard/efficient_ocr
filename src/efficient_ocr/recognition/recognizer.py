@@ -392,7 +392,7 @@ class Recognizer:
         # create splits
         train_paired_image_json_path, \
             val_paired_image_json_path, \
-                test_paired_image_json_path = self._get_train_splits(self, splitseed=99)
+                test_paired_image_json_path = self._get_train_splits(splitseed=99)
 
         # setup
 

@@ -15,7 +15,7 @@ Recognizer:
     ready_to_go_data_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_char_crops/tk
     pretrained_model_dir:
     train_val_test_split: [0.7, 0.15, 0.15]
-    few_shot: 10
+    few_shot: 1
     batch_size: 128
     lr: 2.0e-3
     dec_lr_factor: 0.9

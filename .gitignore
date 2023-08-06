@@ -185,5 +185,5 @@ runs/
 .DS_Store
 tests/effocr/wandb/**
 src/efficient_ocr/__pycache__/**
-tests/effocr/effocr_package_test_locca_char/**
-tests/effocr/effocr_package_test_locca_word/**
+tests/effocr/effocr_package_test_locca_char*/**
+tests/effocr/effocr_package_test_locca_word*/**

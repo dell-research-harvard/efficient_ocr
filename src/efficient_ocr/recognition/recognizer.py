@@ -250,7 +250,7 @@ class Recognizer:
             # create training data folder
 
             self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"] = \
-                os.path.join(self.config['Recognizer'][self.type]["output_dir"], "training_data")
+                os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "training_data")
 
             # open data json in coco format
 
@@ -282,7 +282,7 @@ class Recognizer:
                     ax, ay, aw, ah = anno["bbox"] # should be in xywh format in COCO, should do some checking for this
                     anno_crop = image_containing_anno.crop((ax, ay, ax+aw, ay+ah))
                     anno_crop_path = os.path.join(
-                        os.path.join(self.config['Recognizer'][self.type]["output_dir"], self.type), 
+                        os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], self.type), 
                         self.encode_path_naming_convention(image_containing_anno_filename, anno_text)
                     )
                     anno_crop.save(anno_crop_path)
@@ -320,7 +320,7 @@ class Recognizer:
 
         # create splits
 
-        os.makedirs(self.config['Recognizer'][self.type]["output_dir"], exist_ok=True)
+        os.makedirs(self.config['Recognizer'][self.type]["model_output_dir"], exist_ok=True)
         np.random.seed(splitseed)
         np.random.shuffle(self.all_paired_image_paths)
 
@@ -329,24 +329,24 @@ class Recognizer:
         val_end_idx = int(len(self.all_paired_image_paths) * (train_pct + val_pct))
 
         train_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[:train_end_idx]]}
-        train_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["output_dir"], f"train_paired_image_paths.json")
+        train_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"train_paired_image_paths.json")
         with open(train_paired_image_json_path, "w") as f:
             json.dump(train_paired_image_paths, f)
 
         val_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[train_end_idx:val_end_idx]]}
-        val_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["output_dir"], f"val_paired_image_paths.json")
+        val_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"val_paired_image_paths.json")
         with open(val_paired_image_json_path, "w") as f:
             json.dump(val_paired_image_paths, f)
 
         test_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[val_end_idx:]]}
-        test_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["output_dir"], f"test_paired_image_paths.json")
+        test_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"test_paired_image_paths.json")
         with open(test_paired_image_json_path, "w") as f:
             json.dump(test_paired_image_paths, f)
 
         # setup
 
         if not self.config['Global']["wandb_project"] is None:
-            wandb.init(project=self.config['Global']["wandb_project"], name=os.path.basename(self.config['Recognizer'][self.type]["output_dir"]))
+            wandb.init(project=self.config['Global']["wandb_project"], name=os.path.basename(self.config['Recognizer'][self.type]["model_output_dir"]))
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
         # load encoder
@@ -474,7 +474,7 @@ class Recognizer:
             if acc >= best_acc:
                 best_acc = acc
                 print("Saving model and index...")
-                self.save_model(self.config['Recognizer'][self.type]["output_dir"], enc, "best", datapara)
+                self.save_model(self.config['Recognizer'][self.type]["model_output_dir"], enc, "best", datapara)
                 print("Model and index saved.")
 
                 if not scheduler is None:
@@ -486,8 +486,8 @@ class Recognizer:
         ## test with best encoder
 
         del enc
-        best_enc = encoder.load(os.path.join(self.config['Recognizer'][self.type]["output_dir"], "enc_best.pth"))
-        self.save_ref_index(render_dataset, best_enc, self.config['Recognizer'][self.type]["output_dir"])
+        best_enc = encoder.load(os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "enc_best.pth"))
+        self.save_ref_index(render_dataset, best_enc, self.config['Recognizer'][self.type]["model_output_dir"])
 
         if self.config['Recognizer'][self.type]["test_at_end"]:
             print("Testing on test set...")
@@ -508,8 +508,8 @@ class Recognizer:
                     query_dataset, 
                     train_dataset if self.config['Recognizer'][self.type]["finetune"] else render_dataset, 
                     best_enc, 
-                    os.path.join(self.config['Recognizer'][self.type]["output_dir"], "ref.index"), 
-                    os.path.join(self.config['Recognizer'][self.type]["output_dir"], "hns.txt"), 
+                    os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "ref.index"), 
+                    os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "hns.txt"), 
                     k=self.config['Recognizer'][self.type]["hardneg_k"]
                 )
             else:
@@ -529,16 +529,16 @@ class Recognizer:
                     query_paths, 
                     train_dataset if self.config['Recognizer'][self.type]["finetune"] else render_dataset, 
                     best_enc, 
-                    os.path.join(self.config['Recognizer'][self.type]["output_dir"], "ref.index"), 
-                    transform, os.path.join(self.config['Recognizer'][self.type]["output_dir"], "hns.txt"), 
+                    os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "ref.index"), 
+                    transform, os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "hns.txt"), 
                     k=self.config['Recognizer'][self.type]["hardneg_k"], 
                     finetune=self.config['Recognizer'][self.type]["finetune"])
             
         # save results of trained model
 
-        self.config['Recognizer'][self.type]['index_path'] = os.path.join(self.config['Recognizer'][self.type]["output_dir"], "ref.index")
-        self.config['Recognizer'][self.type]['candidates_path'] = os.path.join(self.config['Recognizer'][self.type]["output_dir"], "ref.txt")
-        self.config['Recognizer'][self.type]['encoder_path'] = os.path.join(self.config['Recognizer'][self.type]["output_dir"], "enc_best.pth")
+        self.config['Recognizer'][self.type]['index_path'] = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "ref.index")
+        self.config['Recognizer'][self.type]['candidates_path'] = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "ref.txt")
+        self.config['Recognizer'][self.type]['encoder_path'] = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "enc_best.pth")
 
     
     def tester_knn(self, test_set, ref_set, model, split, log=False):
@@ -656,7 +656,7 @@ class Recognizer:
             query_paths = list(set(paired_paths))
 
         ###save query paths to file
-        with open(os.path.join(self.config['Recognizer'][self.type]["output_dir"], f"query_paths.txt"), "w") as f:
+        with open(os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"query_paths.txt"), "w") as f:
             for path in query_paths:
                 f.write(f"{path}\n")
 
@@ -704,7 +704,7 @@ class Recognizer:
                     if wandb_log:
                         wandb.log({f"val/{self.type}/acc": acc})
                     if acc>zs_accuracy:
-                        self.save_model(self.config['Recognizer'][self.type]["output_dir"], model, "best_cer", self.datapara)
+                        self.save_model(self.config['Recognizer'][self.type]["model_output_dir"], model, "best_cer", self.datapara)
                         zs_accuracy=acc
 
             if batch_idx % 100 == 0:

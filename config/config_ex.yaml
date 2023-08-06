@@ -1,9 +1,11 @@
 Global:
   wandb_project: effocr_package_test_locca
+  recognition_only: true
 
 Recognizer:
+  char_only: false
   word:
-    output_dir: ./effocr_package_test_locca_word
+    model_output_dir: ./effocr_package_test_locca_word2
     font_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_font_files
     model_backend: timm
     timm_model_name: mobilenetv3_small_050.lamb_in1k
@@ -42,7 +44,7 @@ Recognizer:
     hns_txt_path: 
     epoch_viz_dir:
   char:
-    output_dir: ./effocr_package_test_locca_char
+    model_output_dir: ./effocr_package_test_locca_char2
     font_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_font_files
     model_backend: timm
     timm_model_name: mobilenetv3_small_050.lamb_in1k

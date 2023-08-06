@@ -250,7 +250,7 @@ class Recognizer:
             # create training data folder
 
             self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"] = \
-                os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "training_data")
+                os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "ready_to_go_training_data")
 
             # extract important metadata
 
@@ -268,6 +268,7 @@ class Recognizer:
             self.anno_crop_and_text_dict = defaultdict(list)
 
             print("Preparing training data...")
+            os.makedirs(os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], self.type), exist_ok=True)
             for anno in tqdm(data_json["annotations"]):
                 if anno["category_id"] == type_catid:
                     image_containing_anno_filename = imageid_filename_dict[anno["image_id"]]
@@ -299,8 +300,9 @@ class Recognizer:
 
             # add in paired data
 
+            print("Adding in paired data to synth data...")
             self.all_paired_image_paths = []
-            for k, v in self.anno_crop_and_text_dict.items():
+            for k, v in tqdm(self.anno_crop_and_text_dict.items()):
                 for anno_img_path in v:
                     assert "PAIRED" in anno_img_path
                     shutil.copy(anno_img_path, os.path.join(self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"], k))

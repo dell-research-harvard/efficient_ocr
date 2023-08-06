@@ -46,6 +46,6 @@ Recognizer:
     int_eval_steps:
     hns_txt_path: # ./effocr_package_test_tk/hns.txt
     epoch_viz_dir:
-    train_set_from_coco_json:
-    val_set_from_coco_json:
-    test_set_from_coco_json:
+    train_set_from_coco_json: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_datasets/teikoku/combined/train70.json
+    val_set_from_coco_json: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_datasets/teikoku/combined/val15.json
+    test_set_from_coco_json: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_datasets/teikoku/combined/test15.json

@@ -9,7 +9,8 @@ Recognizer:
     font_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_font_files
     model_backend: timm
     timm_model_name: mobilenetv3_small_050.lamb_in1k
-    render_dict: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/e2e2e/end-to-end-pipeline/pipeline_egress/silver_dpd/full_wordlist_effocr.txt
+    render_dict: 
+      - /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/e2e2e/end-to-end-pipeline/pipeline_egress/silver_dpd/full_wordlist_effocr.txt
     ready_to_go_data_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/word_level_effocr/fullsym_locc_dict_words_paired_silver/images
     pretrained_model_dir:
     train_val_test_split: [0.7, 0.15, 0.15]
@@ -52,7 +53,8 @@ Recognizer:
     font_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_font_files
     model_backend: timm
     timm_model_name: mobilenetv3_small_050.lamb_in1k
-    render_dict: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_charsets/allchars.txt
+    render_dict: 
+      - /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_charsets/allchars.txt
     ready_to_go_data_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_char_crops/locca
     pretrained_model_dir:
     train_val_test_split: [0.7, 0.15, 0.15]

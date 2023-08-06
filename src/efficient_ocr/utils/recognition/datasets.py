@@ -204,6 +204,7 @@ def create_dataset(
     assert len(set(paired_val_idx).intersection(set(paired_test_idx))) == 0
     assert len(set(paired_test_idx).intersection(set(paired_train_idx))) == 0
     
+    """
     if len(other_idx) != 0:
         other_len = len(other_idx)
         other_train_end_idx = int(other_len * tvt_split[0])
@@ -216,6 +217,7 @@ def create_dataset(
         paired_train_idx += other_train_idx
         paired_val_idx += other_val_idx
         paired_test_idx += other_test_idx
+    """
     
     print("total render idx: ", len(render_idx))
     print("total other idx: ", len(other_idx))

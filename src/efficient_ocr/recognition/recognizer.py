@@ -851,7 +851,7 @@ class Recognizer:
 
 
     @staticmethod
-    def encode_path_naming_convention(self, image_containing_anno_filename, anno_text):
+    def encode_path_naming_convention(image_containing_anno_filename, anno_text):
         file_stem = os.path.splitext(image_containing_anno_filename)[0]
         if self.type == "char":
             return f"PAIRED-{file_stem}-char-{str_to_ord_str(anno_text)}.png"
@@ -860,7 +860,7 @@ class Recognizer:
 
  
     @staticmethod
-    def decode_path_naming_convention(self, path_name):
+    def decode_path_naming_convention(path_name):
         if self.type == "char":
             return path_name.split("-char-")[1].split(".")[0]
         else:

@@ -352,7 +352,7 @@ class Recognizer:
                     train_coco_file_names = [os.path.splitext(x['file_name'])[0]  for x in train_coco['images']]
                     train_paired_image_paths = \
                         {"images": [{"file_name": x} for x in self.all_paired_image_paths if \
-                                    any(os.path.basename(x).startswith('PAIRED_'+y) or os.path.basename(x).startswith('PAIRED-'+y) for y in train_coco_file_names)]}
+                                    any(os.path.basename(x).startswith('PAIRED_'+y+"_") or os.path.basename(x).startswith('PAIRED-'+y+"_") for y in train_coco_file_names)]}
             else:
                 train_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[:train_end_idx]]}
             train_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"train_paired_image_paths.json")
@@ -366,7 +366,7 @@ class Recognizer:
                 val_coco_file_names = [os.path.splitext(x['file_name'])[0]  for x in val_coco['images']]
                 val_paired_image_paths = \
                     {"images": [{"file_name": x} for x in self.all_paired_image_paths if \
-                                any(os.path.basename(x).startswith('PAIRED_'+y) or os.path.basename(x).startswith('PAIRED-'+y) for y in val_coco_file_names)]}
+                                any(os.path.basename(x).startswith('PAIRED_'+y+"_") or os.path.basename(x).startswith('PAIRED-'+y+"_") for y in val_coco_file_names)]}
         else:
             val_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[train_end_idx:val_end_idx]]}
         val_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"val_paired_image_paths.json")
@@ -380,7 +380,7 @@ class Recognizer:
                 test_coco_file_names = [os.path.splitext(x['file_name'])[0] for x in test_coco['images']]
                 test_paired_image_paths = \
                     {"images": [{"file_name": x} for x in self.all_paired_image_paths if \
-                                any(os.path.basename(x).startswith('PAIRED_'+y) or os.path.basename(x).startswith('PAIRED-'+y) for y in test_coco_file_names)]}
+                                any(os.path.basename(x).startswith('PAIRED_'+y+"_") or os.path.basename(x).startswith('PAIRED-'+y+"_") for y in test_coco_file_names)]}
         else:
             test_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[val_end_idx:]]}
         test_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"test_paired_image_paths.json")

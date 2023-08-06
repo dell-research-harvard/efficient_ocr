@@ -104,7 +104,10 @@ class FontImageFolder(ImageFolder):
         ):
             sample = self.paired_transform(sample)
         else:
-            sample = self.render_transform(sample)
+            try:
+                sample = self.render_transform(sample)
+            except RuntimeError:
+                sample = self.paired_transform(sample)
 
         return sample, target
 

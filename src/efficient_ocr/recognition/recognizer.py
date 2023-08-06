@@ -282,7 +282,7 @@ class Recognizer:
                     anno_crop = image_containing_anno.crop((ax, ay, ax+aw, ay+ah))
                     anno_crop_path = os.path.join(
                         os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], self.type), 
-                        self.encode_path_naming_convention(image_containing_anno_filename, anno_text)
+                        self.encode_path_naming_convention(image_containing_anno_filename, anno_text, ax, ay)
                     )
                     anno_crop.save(anno_crop_path)
                     self.anno_crop_and_text_dict[str_to_ord_str(anno_text)].append(anno_crop_path)
@@ -855,12 +855,12 @@ class Recognizer:
         return tester.get_all_embeddings(dataset, model)
 
 
-    def encode_path_naming_convention(self, image_containing_anno_filename, anno_text):
+    def encode_path_naming_convention(self, image_containing_anno_filename, anno_text, x, y):
         file_stem = os.path.splitext(image_containing_anno_filename)[0]
         if self.type == "char":
-            return f"PAIRED-{file_stem}-{uuid.uuid4()}-char-{str_to_ord_str(anno_text)}.png"
+            return f"PAIRED-{file_stem}-{x}_{y}-char-{str_to_ord_str(anno_text)}.png"
         else:
-            return f"PAIRED-{file_stem}-{uuid.uuid4()}-word-{str_to_ord_str(anno_text)}.png"
+            return f"PAIRED-{file_stem}-{x}_{y}-word-{str_to_ord_str(anno_text)}.png"
 
  
     def decode_path_naming_convention(self, path_name):

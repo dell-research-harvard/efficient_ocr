@@ -7,7 +7,7 @@ def test_recog_train():
     config_yaml = "../../config/config_jp_fs_ex.yaml"
     
     effocr = EffOCR(
-        data_json, data_dir, config_yaml
+        config_yaml, data_json, data_dir
     )
 
     effocr.train(target=['char_recognition'])

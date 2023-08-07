@@ -12,7 +12,7 @@ Recognizer:
     render_dict: 
       - /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/e2e2e/end-to-end-pipeline/pipeline_egress/silver_dpd/full_wordlist_effocr.txt
     ready_to_go_data_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/word_level_effocr/fullsym_locc_dict_words_paired_silver/images
-    pretrained_model_dir: ./models/yolo/word_recognizer_new
+    pretrained_model_dir: 
     train_val_test_split: [0.7, 0.15, 0.15]
     few_shot:
     batch_size: 256
@@ -50,6 +50,8 @@ Recognizer:
     test_set_from_coco_json:
     num_cores:
     providers:
+    huggingface_model: dell-research-harvard/effocr_en/word_recognizer
+
   char:
     model_output_dir: ./effocr_package_test_locca_char2
     font_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_font_files
@@ -58,7 +60,7 @@ Recognizer:
     render_dict: 
       - /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_charsets/allchars.txt
     ready_to_go_data_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_char_crops/locca
-    pretrained_model_dir: ./models/yolo/char_recognizer
+    pretrained_model_dir: 
     train_val_test_split: [0.7, 0.15, 0.15]
     few_shot: 
     batch_size: 128
@@ -96,9 +98,10 @@ Recognizer:
     test_set_from_coco_json:
     num_cores:
     providers:
+    huggingface_model: dell-research-harvard/effocr_en/char_recognizer
 
 Localizer: 
-  model_path: ./models/yolo/localizer_model.pt
+  model_path: 
   mmdet_config: 
   iou_thresh: 0.10
   conf_thresh: 0.25 
@@ -114,7 +117,7 @@ Localizer:
   batch_size: 16
   vertical: False
   device: cpu
-  huggingface_model: 
+  huggingface_model: dell-research-harvard/effocr_en/localizer_model.pt
 
 
 Line:

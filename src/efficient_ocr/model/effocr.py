@@ -79,7 +79,6 @@ class EffOCR:
     def _postprocess(self, results, **kwargs):
         full_results = [None] * len(results.keys())
         for bbox_idx in results.keys():
-            print(bbox_idx)
             full_text = '\n'.join([' '.join(results[bbox_idx][i]['word_preds']) for i in range(len(results[bbox_idx]))])
             full_results[bbox_idx] = EffOCRResult(full_text, results[bbox_idx])
 

@@ -29,6 +29,8 @@ from torch.optim import AdamW
 import wandb
 from collections import defaultdict
 import shutil
+from huggingface_hub import hf_hub_download
+
 from tqdm import tqdm
 
 from ..utils import initialize_onnx_model
@@ -166,11 +168,23 @@ class Recognizer:
         self.config = config
         self.type = type
 
+        if self.config['Recognizer'][self.type]['huggingface_model'] is not None:
+            self.config['Recognizer'][self.type]['index_path'] = hf_hub_download('/'.join(self.config['Recognizer'][self.type]['huggingface_model'].split('/')[:-1]), 
+                                                                                 self.config['Recognizer'][self.type]['huggingface_model'].split('/')[-1] + '/{}_index.index'.format(self.type))
+            self.config['Recognizer'][self.type]['candidates_path'] = hf_hub_download('/'.join(self.config['Recognizer'][self.type]['huggingface_model'].split('/')[:-1]), 
+                                                                                      self.config['Recognizer'][self.type]['huggingface_model'].split('/')[-1] + '/{}_ref.txt'.format(self.type))
+            if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
+                self.config['Recognizer'][self.type]['encoder_path'] = hf_hub_download('/'.join(self.config['Recognizer'][self.type]['huggingface_model'].split('/')[:-1]), self.config['Recognizer'][self.type]['huggingface_model'].split('/')[-1] + '/enc_best.pth')
+            elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
+                self.config['Recognizer'][self.type]['encoder_path'] = hf_hub_download('/'.join(self.config['Recognizer'][self.type]['huggingface_model'].split('/')[:-1]), self.config['Recognizer'][self.type]['huggingface_model'].split('/')[-1] + '/enc.onnx')
+            self.initialize_model()
+
+
         if self.config['Recognizer'][self.type]['pretrained_model_dir'] is None:
             self.config['Recognizer'][self.type]['encoder_path'] = None
             self.config['Recognizer'][self.type]['index_path'] = None
             self.config['Recognizer'][self.type]['candidates_path'] = None
-        else:
+        elif self.config['Recognizer'][self.type]['huggingface_model'] is not None:
             if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
                 self.config['Recognizer'][self.type]['encoder_path'] = os.path.join(self.config['Recognizer'][self.type]['pretrained_model_dir'], 'enc_best.pth')
             elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':

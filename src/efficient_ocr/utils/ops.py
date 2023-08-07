@@ -479,4 +479,7 @@ def visualize_effocr_result(imgs, annotations_path, save_path):
         canvas[y_top:y_top + char_canvas.shape[0], x_left : x_left + char_canvas.shape[1]] = char_canvas
 
         # Save the canvas to the save_path
-        cv2.imwrite(os.path.join(save_path, str(img_idx) + '.png'), canvas)
+        if save_path.endswith('png') or save_path.endswith('jpg'):
+            cv2.imwrite(save_path, canvas)
+        else:
+            cv2.imwrite(os.path.join(save_path, str(img_idx) + '.png'), canvas)

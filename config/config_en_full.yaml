@@ -1,18 +1,19 @@
 Global:
   wandb_project: effocr_package_test_locca
-  recognition_only: true
+  recognition_only: false
   char_only: false
+  language: en
 
 Recognizer:
   word:
     model_output_dir: ./effocr_package_test_locca_word2
     font_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_font_files
-    model_backend: timm
+    model_backend: onnx
     timm_model_name: mobilenetv3_small_050.lamb_in1k
     render_dict: 
       - /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/e2e2e/end-to-end-pipeline/pipeline_egress/silver_dpd/full_wordlist_effocr.txt
     ready_to_go_data_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/word_level_effocr/fullsym_locc_dict_words_paired_silver/images
-    pretrained_model_dir:
+    pretrained_model_dir: ./models/yolo/word_recognizer_new
     train_val_test_split: [0.7, 0.15, 0.15]
     few_shot:
     batch_size: 256
@@ -48,15 +49,17 @@ Recognizer:
     train_set_from_coco_json:
     val_set_from_coco_json:
     test_set_from_coco_json:
+    num_cores:
+    providers:
   char:
     model_output_dir: ./effocr_package_test_locca_char2
     font_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_font_files
-    model_backend: timm
+    model_backend: onnx
     timm_model_name: mobilenetv3_small_050.lamb_in1k
     render_dict: 
       - /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_charsets/allchars.txt
     ready_to_go_data_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_char_crops/locca
-    pretrained_model_dir:
+    pretrained_model_dir: ./models/yolo/char_recognizer
     train_val_test_split: [0.7, 0.15, 0.15]
     few_shot: 
     batch_size: 128
@@ -92,10 +95,12 @@ Recognizer:
     train_set_from_coco_json:
     val_set_from_coco_json:
     test_set_from_coco_json:
+    num_cores:
+    providers:
 
 Localizer: 
-  model_path: /models/mmdet/cascade_locca.pth
-  localizer_mmdet_config: /models/mmdet/cascade_locca_config.py
+  model_path: ./models/yolo/localizer_model.pt
+  mmdet_config: 
   iou_thresh: 0.10
   conf_thresh: 0.25 
   onnx_providers: 
@@ -106,9 +111,14 @@ Localizer:
   max_det: 200
   language: en
   vertical: False
+  training_name: effocr_localizer
+  epochs: 50
+  batch_size: 16
+  device: cpu
+
 
 Line:
-  model_path: /models/yolo/line_model.pt
+  model_path: ./models/yolo/line_model.pt
   iou_thresh: 0.15
   conf_thresh: 0.20
   num_cores:
@@ -117,4 +127,8 @@ Line:
   model_backend: yolo
   min_seg_ratio: 2
   visualize: 
-  max_det: 
+  max_det: 200
+  training_name: effocr_line
+  epochs: 50
+  batch_size: 16
+  device: cpu

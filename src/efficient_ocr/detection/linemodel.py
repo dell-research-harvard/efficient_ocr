@@ -19,18 +19,6 @@ from ..utils import DEFAULT_MEAN, DEFAULT_STD
 from ..utils import create_yolo_training_data, create_yolo_yaml
 
 
-DEFAULT_LINE_CONFIG = { 'line_model_path': './models/yolo/line_model.pt',
-                        'iou_thresh': 0.15,
-                        'conf_thresh': 0.20, 
-                        'num_cores': None,
-                        'providers': None, 
-                        'input_shape': (640, 640),
-                        'model_backend': 'yolo',
-                        'min_seg_ratio': 2,
-                        'visualize': None,
-                        'num_cores': None,
-                        'max_det': 200}
-
 TRAINING_REQUIRED_ARGS = ['epochs', 'batch_size', 'line_training_name', 'device']
 
 
@@ -56,12 +44,9 @@ class LineModel:
 
         '''Set up the config'''
         self.config = config
-        for key, value in DEFAULT_LINE_CONFIG.items():
-            if key not in self.config:
-                self.config[key] = value
 
         for key, value in kwargs.items():
-            self.config[key] = value
+            self.config['Global'][key] = value
 
         self.initialize_model()
 
@@ -84,18 +69,18 @@ class LineModel:
         Returns:
             _type_: _description_
         """
-        if self.config['model_backend'] == 'yolo':
-            self.model = yolov5.load(self.config['line_model_path'], device='cpu')
-            self.model.conf = self.config['conf_thresh']  # NMS confidence threshold
-            self.model.iou = self.config['iou_thresh']  # NMS IoU threshold
+        if self.config['Line']['model_backend'] == 'yolo':
+            self.model = yolov5.load(self.config['Line']['model_path'], device='cpu')
+            self.model.conf = self.config['Line']['conf_thresh']  # NMS confidence threshold
+            self.model.iou = self.config['Line']['iou_thresh']  # NMS IoU threshold
             self.model.agnostic = False  # NMS class-agnostic
             self.model.multi_label = False  # NMS multiple labels per box
-            self.model.max_det = self.config['max_det']  # maximum number of detections per image
+            self.model.max_det = self.config['Line']['max_det']  # maximum number of detections per image
 
-        elif self.config['model_backend'] == 'onnx':
-            self.model, self.input_name, self.input_shape = initialize_onnx_model(self.config['line_model_path'], self.config)
+        elif self.config['Line']['model_backend'] == 'onnx':
+            self.model, self.input_name, self.input_shape = initialize_onnx_model(self.config['Line']['model_path'], self.config)
 
-        elif self.config['model_backend'] == 'mmdetection':
+        elif self.config['Line']['model_backend'] == 'mmdetection':
             raise NotImplementedError('mmdetection not yet implemented!')
         else:
             raise ValueError('Invalid model backend specified! Must be one of yolo, onnx, or mmdetection')
@@ -118,11 +103,11 @@ class LineModel:
         else:
             raise ValueError('Input type {} is not implemented'.format(type(imgs)))
         
-        if self.config['model_backend'] == 'onnx':    
+        if self.config['Line']['model_backend'] == 'onnx':    
             results = [self.model.run(None, {self._input_name: img}) for img in imgs]
-        elif self.config['model_backend'] == 'yolo':
+        elif self.config['Line']['model_backend'] == 'yolo':
             results = [self.model(img, augment=False) for img in imgs]
-        elif self.config['model_backend'] == 'mmdetection':
+        elif self.config['Line']['model_backend'] == 'mmdetection':
             raise NotImplementedError('mmdetection not yet implemented!')
         
         return self._postprocess(results, imgs, num_img_crops, img_shapes, orig_images)
@@ -130,11 +115,11 @@ class LineModel:
     
     def _postprocess(self, results, imgs, num_img_crops, img_shapes, orig_imgs):
         #YOLO NMS is carried out now, other backends will filter by bbox confidence score later
-        if self.config['model_backend'] == 'onnx':  
+        if self.config['Line']['model_backend'] == 'onnx':  
             preds = [torch.from_numpy(pred[0]) for pred in results]
             preds = [yolov5_non_max_suppression(pred, conf_thres = self._conf_thresh, iou_thres=self._iou_thresh, max_det=100)[0] for pred in preds]
 
-        elif self.config['model_backend'] == 'yolo':
+        elif self.config['Line']['model_backend'] == 'yolo':
             preds = [result.pred[0] for result in results]
 
         elif self._model_backend == 'mmdetection':
@@ -171,7 +156,7 @@ class LineModel:
             line_bboxes, line_confs, line_labels = line_predictions[:, :4], line_predictions[:, -2], line_predictions[:, -1]
 
             im_width, im_height = shape[1], shape[0]
-            if self.config['model_backend'] == 'onnx':
+            if self.config['Line']['model_backend'] == 'onnx':
                 if im_width > im_height:
                     h_ratio = (im_height / im_width) * 640
                     h_trans = 640 * ((1 - (im_height / im_width)) / 2)
@@ -188,14 +173,14 @@ class LineModel:
                     line_proj_crops.append((x0, y0, x1, y1))
 
             # No need to rescale when using yolo natively
-            elif self.config['model_backend'] == 'yolo':
+            elif self.config['Line']['model_backend'] == 'yolo':
                 line_proj_crops = []
                 for line_bbox in line_bboxes:
                     x0, y0, x1, y1 = torch.round(line_bbox)
                     x0, y0, x1, y1 = 0, y0, im_width, y1
                     line_proj_crops.append((x0, y0, x1, y1))
 
-            elif self.config['model_backend'] == 'mmdetection':
+            elif self.config['Line']['model_backend'] == 'mmdetection':
                 raise NotImplementedError('mmdetection not yet implemented!')
             
             adjusted_preds.append((line_proj_crops, line_confs, line_labels))
@@ -226,18 +211,18 @@ class LineModel:
             return []
              
     def format_line_img(self, img):
-        if self.config['model_backend'] == 'onnx':
-            im = letterbox(img, self.config['input_shape'], stride=32, auto=False)[0]  # padded resize
+        if self.config['Line']['model_backend'] == 'onnx':
+            im = letterbox(img, self.config['Line']['input_shape'], stride=32, auto=False)[0]  # padded resize
             im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
             im = np.ascontiguousarray(im)  # contiguous
             im = im.astype(np.float32) / 255.0  # 0 - 255 to 0.0 - 1.0
             if im.ndim == 3:
                 im = np.expand_dims(im, 0)
         
-        elif self.config['model_backend'] == 'yolo':
+        elif self.config['Line']['model_backend'] == 'yolo':
             im = img
 
-        elif self.config['model_backend'] == 'mmdetection':
+        elif self.config['Line']['model_backend'] == 'mmdetection':
             raise NotImplementedError('Backend mmdetection is not implemented')
             
         else:
@@ -247,23 +232,23 @@ class LineModel:
 
     def get_crops_from_layout_image(self, image):
         im_width, im_height = image.shape[1], image.shape[0]
-        if im_height <= im_width * self.config['min_seg_ratio']:
+        if im_height <= im_width * self.config['Line']['min_seg_ratio']:
             return [image]
         else:
             y0 = 0
-            y1 = im_width * self.config['min_seg_ratio']
+            y1 = im_width * self.config['Line']['min_seg_ratio']
             crops = []
             while y1 <= im_height:
                 crops.append(image[y0:y1, 0:im_width])
-                y0 += int(im_width * self.config['min_seg_ratio'] * 0.75) # .75 factor ensures there is overlap between crops
-                y1 += int(im_width * self.config['min_seg_ratio'] * 0.75)
+                y0 += int(im_width * self.config['Line']['min_seg_ratio'] * 0.75) # .75 factor ensures there is overlap between crops
+                y1 += int(im_width * self.config['Line']['min_seg_ratio'] * 0.75)
             
             crops.append(image[y0:im_height, 0:im_width])
             return crops
 
     # TODO: Train
     def train(self, training_data, **kwargs):
-        if not self.config['model_backend'] == 'yolo':
+        if not self.config['Line']['model_backend'] == 'yolo':
             raise NotImplementedError('Training is only implemented for yolo backend')
         
         for key, val in kwargs.items():
@@ -279,9 +264,9 @@ class LineModel:
         # Create yaml with training data
         yaml_loc = create_yolo_yaml(data_path, 'line')
 
-        train.run(imgsz=self.config['input_shape'][0], data=os.path.join(os.getcwd(), yaml_loc), weights=os.path.join(os.getcwd(), self.config['line_model_path']), epochs=self.config['epochs'], 
-                     batch_size=self.config['batch_size'], device=self.config['device'], exist_ok=True, name = self.config['line_training_name'])
+        train.run(imgsz=self.config['Line']['input_shape'][0], data=os.path.join(os.getcwd(), yaml_loc), weights=os.path.join(os.getcwd(), self.config['Line']['model_path']), epochs=self.config['epochs'], 
+                     batch_size=self.config['Line']['batch_size'], device=self.config['Line']['device'], exist_ok=True, name = self.config['Line']['training_name'])
         
 
-        self.config['line_model_path'] = os.path.join('./runs/train/', self.config['line_training_name'], 'weights', 'best.pt')
+        self.config['Line']['model_path'] = os.path.join('./runs/train/', self.config['Line']['training_name'], 'weights', 'best.pt')
         self.initialize_model()

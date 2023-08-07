@@ -20,20 +20,6 @@ from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppre
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
 from ..utils import create_yolo_training_data, create_yolo_yaml
 
-DEFAULT_LOCALIZER_CONFIG = { 'localizer_model_path': './models/mmdet/cascade_locca.pth',
-                            'localizer_mmdet_config': './models/mmdet/cascade_locca_config.py',
-                        'iou_thresh': 0.10,
-                        'conf_thresh': 0.25, 
-                        'num_cores': None,
-                        'providers': None, 
-                        'input_shape': (640, 640),
-                        'model_backend': 'yolo',
-                        'visualize': None,
-                        'num_cores': None,
-                        'max_det': 200,
-                        'language': 'en',
-                        'vertiacal': False}
-
 TRAINING_REQUIRED_ARGS = ['epochs', 'batch_size', 'localizer_training_name', 'device']
 
 def iteration(model, input):
@@ -97,12 +83,8 @@ class LocalizerModel:
 
         '''Set up the config'''
         self.config = config
-        for key, value in DEFAULT_LOCALIZER_CONFIG.items():
-            if key not in self.config:
-                self.config[key] = value
-
-        for key, value in kwargs.items():
-            self.config[key] = value
+        for k, v in kwargs.items():
+            self.config['Global'][k] = v
 
         self.initialize_model()
 
@@ -112,19 +94,19 @@ class LocalizerModel:
         Returns:
             _type_: _description_
         """
-        if self.config['model_backend'] == 'yolo':
-            self.model = yolov5.load(self.config['localizer_model_path'], device='cpu')
-            self.model.conf = self.config['conf_thresh']  # NMS confidence threshold
-            self.model.iou = self.config['iou_thresh']  # NMS IoU threshold
+        if self.config['Localizer']['model_backend'] == 'yolo':
+            self.model = yolov5.load(self.config['Localizer']['model_path'], device='cpu')
+            self.model.conf = self.config['Localizer']['conf_thresh']  # NMS confidence threshold
+            self.model.iou = self.config['Localizer']['iou_thresh']  # NMS IoU threshold
             self.model.agnostic = False  # NMS class-agnostic
             self.model.multi_label = False  # NMS multiple labels per box
-            self.model.max_det = self.config['max_det']  # maximum number of detections per image
+            self.model.max_det = self.config['Localizer']['max_det']  # maximum number of detections per image
 
-        elif self.config['model_backend'] == 'onnx':
-            self.model, self.input_name, self.input_shape = initialize_onnx_model(self.config['localizer_model_path'], self.config)
+        elif self.config['Localizer']['model_backend'] == 'onnx':
+            self.model, self.input_name, self.input_shape = initialize_onnx_model(self.config['Localizer']['model_path'], self.config)
 
-        elif self.config['model_backend'] == 'mmdetection':
-            if self.config['localizer_mmdet_config'] is None:
+        elif self.config['Localizer']['model_backend'] == 'mmdetection':
+            if self.config['Localizer']['mmdet_config'] is None:
                 raise ValueError('Must specify a mmdetection config file for mmdetection models!')
             loc_mmdet_config = {
                     "model.rpn_head.anchor_generator.scales":[2,8,32],
@@ -135,7 +117,7 @@ class LocalizerModel:
                     "model.roi_head.bbox_head.2.num_classes": 2,
                     "model.roi_head.mask_head.num_classes": 2,
                 }
-            self.localizer = init_detector(self.config['localizer_mmdet_config'], self.config['localizer_model_path'], device='cpu', cfg_options=loc_mmdet_config)
+            self.localizer = init_detector(self.config['Localizer']['mmdet_config'], self.config['Localizer']['model_path'], device='cpu', cfg_options=loc_mmdet_config)
 
         else:
             raise ValueError('Invalid model backend specified! Must be one of yolo, onnx, or mmdetection')
@@ -166,10 +148,10 @@ class LocalizerModel:
 
         # Set up and run all the threads
         threads = []
-        if self.config['num_cores'] is None:
-            self.config['num_cores'] = multiprocessing.cpu_count()
+        if self.config['Localizer']['num_cores'] is None:
+            self.config['Localizer']['num_cores'] = multiprocessing.cpu_count()
         
-        for _ in range(self.config['num_cores']):
+        for _ in range(self.config['Localizer']['num_cores']):
             threads.append(LocalizerEngineExecutorThread(self.model, input_queue, output_queue))
         
         for thread in threads:
@@ -186,7 +168,7 @@ class LocalizerModel:
             preds = preds.pred[0]
             bboxes, confs, labels = preds[:, :4], preds[:, -2], preds[:, -1]
             
-            if self.config['language'] == 'en':
+            if self.config['Global']['language'] == 'en':
                 char_bboxes, word_bboxes = bboxes[labels == 0], bboxes[labels == 1]
                 if word_bboxes.shape[0] > 0:
                     char_bboxes, word_bboxes, word_char_overlap = en_preprocess(char_bboxes, word_bboxes)
@@ -256,11 +238,11 @@ class LocalizerModel:
         return localizer_results
     
     def train(self, training_data, **kwargs):
-        if self.config['model_backend'] != 'yolo':
+        if self.config['Localizer']['model_backend'] != 'yolo':
             raise NotImplementedError('Only YOLO model backend is currently supported for training!')
         
         for key, val in kwargs.items():
-            self.config[key] = val
+            self.config['Localizer'][key] = val
 
         for key in TRAINING_REQUIRED_ARGS:
             if key not in self.config.keys():
@@ -273,9 +255,9 @@ class LocalizerModel:
         yaml_loc = create_yolo_yaml(data_locs, 'localizer')
 
 
-        train.run(imgsz=self.config['input_shape'][0], data=yaml_loc, weights=self.config['localizer_model_path'], epochs=self.config['epochs'], 
-                     batch_size=self.config['batch_size'], device=self.config['device'], exist_ok=True, name = self.config['localizer_training_name'])
+        train.run(imgsz=self.config['Localizer']['input_shape'][0], data=yaml_loc, weights=self.config['Localizer']['model_path'], epochs=self.config['Localizer']['epochs'], 
+                     batch_size=self.config['Localizer']['batch_size'], device=self.config['Localizer']['device'], exist_ok=True, name = self.config['Localizer']['training_name'])
         
 
-        self.config['localizer_model_path'] = os.path.join(self.config['localizer_training_name'], 'weights', 'best.pt')
+        self.config['Localizer']['model_path'] = os.path.join(self.config['Localizer']['training_name'], 'weights', 'best.pt')
         self.initialize_model()

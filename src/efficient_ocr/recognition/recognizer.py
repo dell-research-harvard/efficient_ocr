@@ -171,16 +171,22 @@ class Recognizer:
             self.config['Recognizer'][self.type]['index_path'] = None
             self.config['Recognizer'][self.type]['candidates_path'] = None
         else:
-            self.config['Recognizer'][self.type]['encoder_path'] = os.path.join(self.config['Recognizer'][self.type]['pretrained_model_dir'], 'enc_best.pth')
-            self.config['Recognizer'][self.type]['index_path'] = os.path.join(['Recognizer'][self.type]['pretrained_model_dir'], 'ref.index')
-            self.config['Recognizer'][self.type]['candidates_path'] = os.path.join(['Recognizer'][self.type]['pretrained_model_dir'], 'ref.txt')
+            if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
+                self.config['Recognizer'][self.type]['encoder_path'] = os.path.join(self.config['Recognizer'][self.type]['pretrained_model_dir'], 'enc_best.pth')
+            elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
+                self.config['Recognizer'][self.type]['encoder_path'] = os.path.join(self.config['Recognizer'][self.type]['pretrained_model_dir'], 'enc_best.onnx')
+            else:
+                raise NotImplementedError('This backend ({}) is not supported'.format(self.config['Recognizer'][self.type]['model_backend']))
+
+            self.config['Recognizer'][self.type]['index_path'] = os.path.join(self.config['Recognizer'][self.type]['pretrained_model_dir'], 'ref.index')
+            self.config['Recognizer'][self.type]['candidates_path'] = os.path.join(self.config['Recognizer'][self.type]['pretrained_model_dir'], 'ref.txt')
             self.initialize_model()
                 
         self.transform = get_transform(type)
 
 
     def initialize_model(self):
-
+        print(os.path.abspath(self.config['Recognizer'][self.type]['index_path']))
         self.index = faiss.read_index(self.config['Recognizer'][self.type]['index_path'])
         with open(self.config['Recognizer'][self.type]['candidates_path'], 'r') as f:
             self.candidates = f.read().splitlines()
@@ -196,7 +202,7 @@ class Recognizer:
             self.input_name = None
 
         elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
-            self.model, self.input_name, _ = initialize_onnx_model(self.config['Recognizer'][self.type]['encoder_path'], self.config)
+            self.model, self.input_name, _ = initialize_onnx_model(self.config['Recognizer'][self.type]['encoder_path'], self.config['Recognizer'][self.type])
 
 
     def __call__(self, images):

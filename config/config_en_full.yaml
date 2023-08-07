@@ -92,3 +92,29 @@ Recognizer:
     train_set_from_coco_json:
     val_set_from_coco_json:
     test_set_from_coco_json:
+
+Localizer: 
+  model_path: /models/mmdet/cascade_locca.pth
+  localizer_mmdet_config: /models/mmdet/cascade_locca_config.py
+  iou_thresh: 0.10
+  conf_thresh: 0.25 
+  onnx_providers: 
+  input_shape: (640, 640)
+  model_backend: yolo
+  visualize: 
+  num_cores: 
+  max_det: 200
+  language: en
+  vertical: False
+
+Line:
+  model_path: /models/yolo/line_model.pt
+  iou_thresh: 0.15
+  conf_thresh: 0.20
+  num_cores:
+  providers:
+  input_shape: (640, 640)
+  model_backend: yolo
+  min_seg_ratio: 2
+  visualize: 
+  max_det: 

@@ -22,7 +22,13 @@ class EffOCRResult:
 class EffOCR:
 
 
-    def __init__(self, config_yaml, data_json = None, data_dir = None, **kwargs):
+    def __init__(
+            self, config_yaml, 
+            data_json = None, data_dir = None, 
+            line_detector = None, localizer = None, 
+            word_recognizer = None, char_recognizer = None,
+            **kwargs
+        ):
 
         self.training_funcs = {'line_detection': self._train_line,
                                 'word_and_character_detection': self._train_localizer,
@@ -42,6 +48,15 @@ class EffOCR:
             
         self.config = self._load_config(config_yaml)
 
+        if not line_detector is None and not os.path.isdir(line_detector):
+            self.config['Line']['huggingface_model'] = line_detector
+        if not localizer is None and not os.path.isdir(localizer):
+            self.config['Localizer']['huggingface_model'] = localizer
+        if not word_recognizer is None and not os.path.isdir(word_recognizer):
+            self.config['Recognizer']['word']['huggingface_model'] = word_recognizer
+        if not char_recognizer is None and not os.path.isdir(char_recognizer):
+            self.config['Recognizer']['char']['huggingface_model'] = char_recognizer
+        
         if self.config['Global']['char_only'] and self.config['Global']['recognition_only']:
             self.char_model = self._initialize_char_recognizer()
         elif self.config['Global']['recognition_only']:

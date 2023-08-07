@@ -10,7 +10,7 @@ def test_recog_train():
         data_json, data_dir, config_yaml
     )
 
-    effocr.train(target=['char_recognition', 'word_recognition'])
+    effocr.train(target=['word_recognition', 'char_recognition'])
 
 if __name__ == '__main__':
     test_recog_train()

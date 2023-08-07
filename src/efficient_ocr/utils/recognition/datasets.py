@@ -187,6 +187,7 @@ def create_dataset(
     val_stems = set(val_stems)
     test_stems = set(test_stems)
 
+    print("Start indexing...")
     paired_val_idx = [idx for idx, (p, t) in (enumerate(dataset.data)) if \
         os.path.basename(p).split(".")[0] in (val_stems)]
     paired_test_idx =[idx for idx, (p, t) in (enumerate(dataset.data)) if \
@@ -195,9 +196,12 @@ def create_dataset(
         os.path.basename(p).split(".")[0] in (train_stems)]
     render_idx = [idx for idx, (p, t) in enumerate(dataset.data) if \
         not os.path.basename(p).startswith("PAIRED")]
+    print("End indexing...")
     
-    other_idx = [idx for idx, (p, t) in enumerate(dataset.data) if \
-        not idx in paired_train_idx + paired_val_idx + paired_test_idx + render_idx]
+    if train_mode == "char":
+        other_idx = [idx for idx, (p, t) in enumerate(dataset.data) if \
+            not idx in paired_train_idx + paired_val_idx + paired_test_idx + render_idx]
+        print("total other idx: ", len(other_idx))
     
     print(f"train len: {len(paired_train_idx)}\nval len: {len(paired_val_idx)}\ntest len: {len(paired_test_idx)}")
     assert len(set(paired_train_idx).intersection(set(paired_val_idx))) == 0
@@ -220,7 +224,6 @@ def create_dataset(
     """
     
     print("total render idx: ", len(render_idx))
-    print("total other idx: ", len(other_idx))
 
     train_stems = list(train_stems)
 

@@ -7,10 +7,8 @@ from efficient_ocr.utils import make_coco_from_effocr_result
 import os
 
 def test_effocr_single():
-    data_json = r'.\data\coco_ex.json'
-    image_dir = r'.\tests\fixtures'
     config_file = r'.\config\config_en_full.yaml'
-    effocr = EffOCR(data_json, image_dir, config_file)
+    effocr = EffOCR(config_file)
     results = effocr.infer(r'.\tests\fixtures\test_locca_image.jpg', make_coco_annotations=True)
     print(results[0].text)
     assert results[0].text.startswith('The tug boat')

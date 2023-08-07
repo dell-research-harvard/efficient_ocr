@@ -22,17 +22,24 @@ class EffOCRResult:
 class EffOCR:
 
 
-    def __init__(self, data_json, data_dir, config_yaml, **kwargs):
+    def __init__(self, config_yaml, data_json = None, data_dir = None, **kwargs):
 
         self.training_funcs = {'line_detection': self._train_line,
                                 'word_and_character_detection': self._train_localizer,
                                 'word_recognition': self._train_word_recognizer,
                                 'char_recognition': self._train_char_recognizer}
         
-        with open(data_json, 'r') as f:
-            self.data_json = json.load(f)
+        if data_json is not None:
+            with open(data_json, 'r') as f:
+                self.data_json = json.load(f)
+        else:
+            data_json = {}
 
-        self.data_dir = data_dir
+        if data_dir is not None:
+            self.data_dir = data_dir
+        else:
+            data_dir = os.getcwd()
+            
         self.config = self._load_config(config_yaml)
 
         if self.config['Global']['char_only'] and self.config['Global']['recognition_only']:

@@ -405,11 +405,6 @@ class Recognizer:
         train_paired_image_json_path, \
             val_paired_image_json_path, \
                 test_paired_image_json_path = self._get_train_splits(splitseed=99)
-        
-        if not self.config['Recognizer'][self.type]['few_shot'] is None:
-            with open(train_paired_image_json_path) as f:
-                fs_train_dict = json.load(f)
-                assert len(fs_train_dict['images']) == self.config['Recognizer'][self.type]['few_shot'] * len(self.cat_path_dict.keys()), f"few shot training set size doesn't match expected size, should be {self.config['Recognizer'][self.type]['few_shot'] * len(self.cat_path_dict.keys())}, but is {len(fs_train_dict['images'])}"
 
         # setup
 

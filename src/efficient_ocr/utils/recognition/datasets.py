@@ -9,6 +9,7 @@ from .samplers import *
 from .transforms import *
 from datetime import datetime
 from tqdm import tqdm
+import random
 
 
 def diff_size_collate(batch):
@@ -103,7 +104,10 @@ class FontImageFolder(ImageFolder):
         ):
             sample = self.paired_transform(sample)
         else:
-            sample = self.render_transform(sample)
+            try:
+                sample = self.render_transform(sample)
+            except RuntimeError:
+                sample = self.paired_transform(sample)
 
         return sample, target
 
@@ -133,6 +137,7 @@ def create_dataset(
         k=8,
         aug_paired=False,
         expansion_factor=1,
+        tvt_split=[0.7, 0.15, 0.15],
     ):
 
     if finetune and pretrain:
@@ -142,7 +147,6 @@ def create_dataset(
     if pretrain:
         print("Pretraining model!")
 
-
     start_time = datetime.now()
 
     if train_mode == "char":
@@ -151,11 +155,12 @@ def create_dataset(
             root_dir, 
             render_transform= create_paired_transform_char(size=imsize) if no_aug else \
                 create_render_transform_char(char_trans_version, latin_suggested_augs, size=imsize), 
-            paired_transform=create_paired_transform_char(size=imsize) if not aug_paired \
-                else create_render_transform_char(char_trans_version, latin_suggested_augs, size=imsize) ,
+            paired_transform=create_paired_transform_char(size=imsize),
             patch_resize=diff_sizes,
         expand_factor=expansion_factor)
+
     else:
+
         dataset = FontImageFolder(
             root_dir, 
             render_transform= create_paired_transform(size=imsize) if no_aug else \
@@ -163,7 +168,6 @@ def create_dataset(
             paired_transform=create_paired_transform(size=imsize) if not aug_paired else create_render_transform(high_blur, size=imsize) ,
             patch_resize=diff_sizes,
         expand_factor=expansion_factor)
-
 
     end_time = datetime.now()
     print(f"Dataset creation time: {end_time - start_time}")
@@ -187,13 +191,36 @@ def create_dataset(
         os.path.basename(p).split(".")[0] in (val_stems)]
     paired_test_idx =[idx for idx, (p, t) in (enumerate(dataset.data)) if \
         os.path.basename(p).split(".")[0] in (test_stems)]
-    
     paired_train_idx = [idx for idx, (p, t) in (enumerate(dataset.data)) if \
         os.path.basename(p).split(".")[0] in (train_stems)]
     render_idx = [idx for idx, (p, t) in enumerate(dataset.data) if \
         not os.path.basename(p).startswith("PAIRED")]
     
+    other_idx = [idx for idx, (p, t) in enumerate(dataset.data) if \
+        not idx in paired_train_idx + paired_val_idx + paired_test_idx + render_idx]
+    
+    print(f"train len: {len(paired_train_idx)}\nval len: {len(paired_val_idx)}\ntest len: {len(paired_test_idx)}")
+    assert len(set(paired_train_idx).intersection(set(paired_val_idx))) == 0
+    assert len(set(paired_val_idx).intersection(set(paired_test_idx))) == 0
+    assert len(set(paired_test_idx).intersection(set(paired_train_idx))) == 0
+    
+    """
+    if len(other_idx) != 0:
+        other_len = len(other_idx)
+        other_train_end_idx = int(other_len * tvt_split[0])
+        other_val_end_idx = int(other_len * (tvt_split[0]+tvt_split[1]))
+        random.seed(99)
+        other_idx = random.sample(other_idx, other_len)
+        other_train_idx = other_idx[:other_train_end_idx]
+        other_val_idx = other_idx[other_train_end_idx:]
+        other_test_idx = other_idx[other_val_end_idx:]
+        paired_train_idx += other_train_idx
+        paired_val_idx += other_val_idx
+        paired_test_idx += other_test_idx
+    """
+    
     print("total render idx: ", len(render_idx))
+    print("total other idx: ", len(other_idx))
 
     train_stems = list(train_stems)
 
@@ -226,46 +253,45 @@ def create_dataset(
     print(f"Len train dataset: {len(train_dataset)}")
     print("Time to create subsets: ", datetime.now() - start_time)
 
-    if train_mode == "char":
-        hn_sampler=HardNegativeClassSamplerChar
-        print("Using split batch sampler")
-    else:
-        print("Using sampler that splits views of the same word into paired and synthetic crops")
-        hn_sampler=AllHNSamplerSplitBatchesPairRender
-
     if hardmined_txt is None:
         train_sampler = NoReplacementMPerClassSampler(
             train_dataset, m=m, batch_size=batch_size, num_passes=num_passes
         )
     else:
+        print("Using hard negatives!")
+
         with open(hardmined_txt) as f:
             hard_negatives = f.read().split("\n")
             print(f"Len hard negatives: {len(hard_negatives)}")
-            train_sampler = hn_sampler(train_dataset, 
-                train_dataset.class_to_idx, hns_set_size=k, m=m, batch_size=batch_size, 
-                num_passes=num_passes)
-
+            if train_mode == "char":
+                train_sampler = HardNegativeClassSamplerChar(train_dataset, 
+                    train_dataset.class_to_idx, hard_negatives, m=m, batch_size=batch_size, 
+                    num_passes=num_passes
+                )
+            else:
+                train_sampler = AllHNSamplerSplitBatchesPairRender(train_dataset, 
+                    train_dataset.class_to_idx, hns_set_size=k, m=m, batch_size=batch_size, 
+                    num_passes=num_passes)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, shuffle=False,
         num_workers=16, pin_memory=True, drop_last=True, 
         sampler=train_sampler, collate_fn=diff_size_collate if diff_sizes else None)
+    
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=batch_size, shuffle=True,
         num_workers=16, pin_memory=True, drop_last=False,
         collate_fn=diff_size_collate if diff_sizes else None)
+    
     test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=batch_size, shuffle=True,
         num_workers=16, pin_memory=True, drop_last=False,
         collate_fn=diff_size_collate if diff_sizes else None)
 
-
-    
     print("Time to create dataloaders: ", datetime.now() - start_time)
 
     print("Train dataset size: ", len(train_dataset))
 
-    
     return train_dataset, val_dataset, test_dataset, train_loader, val_loader, test_loader, train_loader.sampler.nbatches  if (hardmined_txt!=None and train_mode=="word") else None
 
 

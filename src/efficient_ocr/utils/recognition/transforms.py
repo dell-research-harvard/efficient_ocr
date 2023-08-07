@@ -186,7 +186,7 @@ def blur_transform(high):
 
 
 def create_render_transform_char(char_trans_version, latin_suggested_augs, size=224):
-    if char_trans_version == 4: # V4
+    if char_trans_version == 2: # suggested for english/latin
         return T.Compose([
             T.ToTensor(),
             T.RandomErasing(p=0.5, scale=(0.01, 0.01), ratio=(0.3, 3.3), value=255, inplace=False) if latin_suggested_augs else lambda x: x,
@@ -200,12 +200,12 @@ def create_render_transform_char(char_trans_version, latin_suggested_augs, size=
             lambda x: Image.fromarray(A.GaussNoise(var_limit=(10.0, 150.0), mean=0, p=0.25)(image=np.array(x))["image"]),
             T.RandomApply([T.GaussianBlur(15, sigma=(1, 15))], p=0.3),
             T.RandomGrayscale(p=0.2),
-            MedianPad(override=(255,255,255)),
+            CharMedianPad(override=(255,255,255)),
             T.ToTensor(),
             T.Resize((size, size)),
             T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
         ])
-    else: # V1
+    elif char_trans_version == 1: # suggested for japanese
         return T.Compose([
             T.ToTensor(),
             T.RandomApply([T.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1), fill=1)], p=0.7) if latin_suggested_augs \
@@ -217,11 +217,13 @@ def create_render_transform_char(char_trans_version, latin_suggested_augs, size=
             lambda x: Image.fromarray(A.GaussNoise(var_limit=(10.0, 150.0), mean=0, p=0.25)(image=np.array(x))["image"]),
             T.RandomApply([T.GaussianBlur(11, sigma=(0.1, 2.0))], p=0.3), # T.RandomApply([T.GaussianBlur(15, sigma=(1, 4))], p=0.3)
             T.RandomGrayscale(p=0.2),
-            MedianPad(override=(255,255,255)),
+            CharMedianPad(override=(255,255,255)),
             T.ToTensor(),
             T.Resize((size, size)),
             T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
         ])
+    else:
+        raise NotImplementedError
 
 
 def create_render_transform(high_blur, size=224,normalize=True,resize_pad=True):

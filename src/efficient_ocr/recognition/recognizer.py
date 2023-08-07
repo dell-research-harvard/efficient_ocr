@@ -13,6 +13,7 @@ import json
 import PIL
 import os
 from glob import glob
+import uuid
 
 import torch
 import torch.nn as nn
@@ -245,22 +246,19 @@ class Recognizer:
         Transcriptions are currently being passed along with file names
         """
 
+        os.makedirs(self.config['Recognizer'][self.type]["model_output_dir"], exist_ok=True)
+
         if self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"] is None:
 
             # create training data folder
 
             self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"] = \
-                os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "training_data")
-
-            # open data json in coco format
-
-            with open(data_json) as f:
-                data_dict = json.load(f)
+                os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], "ready_to_go_training_data")
 
             # extract important metadata
 
-            cat_catid_dict = {entry["name"]:entry["id"] for entry in data_dict["categories"]}
-            imageid_filename_dict = {x["id"]:x["file_name"] for x in data_dict["images"]}
+            cat_catid_dict = {entry["name"]:entry["id"] for entry in data_json["categories"]}
+            imageid_filename_dict = {x["id"]:x["file_name"] for x in data_json["images"]}
 
             try:
                 type_catid = cat_catid_dict[self.type]
@@ -273,7 +271,8 @@ class Recognizer:
             self.anno_crop_and_text_dict = defaultdict(list)
 
             print("Preparing training data...")
-            for anno in tqdm(data_dict["annotations"]):
+            os.makedirs(os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], self.type), exist_ok=True)
+            for anno in tqdm(data_json["annotations"]):
                 if anno["category_id"] == type_catid:
                     image_containing_anno_filename = imageid_filename_dict[anno["image_id"]]
                     image_containing_anno_path = os.path.join(data_dir, image_containing_anno_filename)
@@ -283,7 +282,7 @@ class Recognizer:
                     anno_crop = image_containing_anno.crop((ax, ay, ax+aw, ay+ah))
                     anno_crop_path = os.path.join(
                         os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], self.type), 
-                        self.encode_path_naming_convention(image_containing_anno_filename, anno_text)
+                        self.encode_path_naming_convention(image_containing_anno_filename, anno_text, ax, ay)
                     )
                     anno_crop.save(anno_crop_path)
                     self.anno_crop_and_text_dict[str_to_ord_str(anno_text)].append(anno_crop_path)
@@ -304,8 +303,9 @@ class Recognizer:
 
             # add in paired data
 
+            print("Adding in paired data to synth data...")
             self.all_paired_image_paths = []
-            for k, v in self.anno_crop_and_text_dict.items():
+            for k, v in tqdm(self.anno_crop_and_text_dict.items()):
                 for anno_img_path in v:
                     assert "PAIRED" in anno_img_path
                     shutil.copy(anno_img_path, os.path.join(self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"], k))
@@ -316,9 +316,20 @@ class Recognizer:
             self.all_paired_image_paths = glob(os.path.join(self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"], "**", "PAIRED*"), recursive=True)
 
 
-    def _train(self, splitseed=99):
+    def _paths_from_coco_json(self, coco_json_path):
+        with open(coco_json_path, 'r') as f:
+            coco = json.load(f)
+            coco_file_names = [os.path.splitext(x['file_name'])[0]  for x in coco['images']]
+            paired_image_paths = \
+                {"images": [{"file_name": x} for x in self.all_paired_image_paths if \
+                            any(os.path.basename(x).startswith('PAIRED_'+y+"_") or \
+                                os.path.basename(x).startswith('PAIRED-'+y+"_") or \
+                                os.path.basename(x).startswith('PAIRED_'+y+"-") or \
+                                os.path.basename(x).startswith('PAIRED-'+y+"-") for y in coco_file_names)]}
+        return paired_image_paths
 
-        # create splits
+
+    def _get_train_splits(self, splitseed=99):
 
         os.makedirs(self.config['Recognizer'][self.type]["model_output_dir"], exist_ok=True)
         np.random.seed(splitseed)
@@ -330,14 +341,19 @@ class Recognizer:
 
         if not self.config['Recognizer'][self.type]['few_shot'] is None:
 
-            cat_path_dict = defaultdict(list)
-            for tp in self.all_paired_image_paths[:train_end_idx]:
+            if not self.config['Recognizer'][self.type]['train_set_from_coco_json'] is None:
+                all_train_paths = [x['file_name'] for x in self._paths_from_coco_json(self.config['Recognizer'][self.type]['train_set_from_coco_json'])['images']]
+            else:
+                all_train_paths = self.all_paired_image_paths[:train_end_idx]
+
+            self.cat_path_dict = defaultdict(list)
+            for tp in all_train_paths:
                 cat = tp.split('/')[-2]
-                cat_path_dict[cat].append(tp)
+                self.cat_path_dict[cat].append(tp)
 
             few_shot_paired_image_paths = []
-            for k, v in cat_path_dict.items():
-                few_shot_samples = np.random.choice(v, self.config['Recognizer'][self.type]['few_shot'], replace=False).tolist()
+            for k, v in self.cat_path_dict.items():
+                few_shot_samples = np.random.choice(v, min(len(v), self.config['Recognizer'][self.type]['few_shot']), replace=False).tolist()
                 few_shot_paired_image_paths.extend([{"file_name": fss} for fss in few_shot_samples])
 
             train_paired_image_paths = {"images": few_shot_paired_image_paths}
@@ -346,21 +362,48 @@ class Recognizer:
                 json.dump(train_paired_image_paths, f)
 
         else:
-            
-            train_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[:train_end_idx]]}
+
+            # train
+            if not self.config['Recognizer'][self.type]['train_set_from_coco_json'] is None:
+                train_paired_image_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['train_set_from_coco_json'])
+            else:
+                train_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[:train_end_idx]]}
             train_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"train_paired_image_paths.json")
             with open(train_paired_image_json_path, "w") as f:
                 json.dump(train_paired_image_paths, f)
             
-        val_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[train_end_idx:val_end_idx]]}
+        # val
+        if not self.config['Recognizer'][self.type]['val_set_from_coco_json'] is None:
+            val_paired_image_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['val_set_from_coco_json'])
+        else:
+            val_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[train_end_idx:val_end_idx]]}
         val_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"val_paired_image_paths.json")
         with open(val_paired_image_json_path, "w") as f:
             json.dump(val_paired_image_paths, f)
 
-        test_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[val_end_idx:]]}
+        # test
+        if not self.config['Recognizer'][self.type]['test_set_from_coco_json'] is None:
+            test_paired_image_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['test_set_from_coco_json'])
+        else:
+            test_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[val_end_idx:]]}
         test_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"test_paired_image_paths.json")
         with open(test_paired_image_json_path, "w") as f:
             json.dump(test_paired_image_paths, f)
+
+        return train_paired_image_json_path, val_paired_image_json_path, test_paired_image_json_path
+
+
+    def _train(self):
+
+        # create splits
+        train_paired_image_json_path, \
+            val_paired_image_json_path, \
+                test_paired_image_json_path = self._get_train_splits(splitseed=99)
+        
+        if not self.config['Recognizer'][self.type]['few_shot'] is None:
+            with open(train_paired_image_json_path) as f:
+                fs_train_dict = json.load(f)
+                assert len(fs_train_dict['images']) == self.config['Recognizer'][self.type]['few_shot'] * len(self.cat_path_dict.keys()), f"few shot training set size doesn't match expected size, should be {self.config['Recognizer'][self.type]['few_shot'] * len(self.cat_path_dict.keys())}, but is {len(fs_train_dict['images'])}"
 
         # setup
 
@@ -418,6 +461,7 @@ class Recognizer:
                 k=self.config['Recognizer'][self.type]["hardneg_k"],
                 aug_paired=self.config['Recognizer'][self.type]["aug_paired"],
                 expansion_factor=self.config['Recognizer'][self.type]["expansion_factor"],
+                tvt_split=self.config['Recognizer'][self.type]["train_val_test_split"]
         )
 
         render_dataset = create_render_dataset(
@@ -479,6 +523,7 @@ class Recognizer:
                 zs_accuracy=best_acc if best_acc != None else 0,
                 wandb_log=not self.config['Global']["wandb_project"] is None
             )
+
             acc = self.tester_knn(
                 val_dataset, 
                 render_dataset, 
@@ -510,7 +555,7 @@ class Recognizer:
 
         if self.config['Recognizer'][self.type]["test_at_end"]:
             print("Testing on test set...")
-            self.tester_knn(test_dataset, render_dataset, best_enc, "test")
+            self.tester_knn(test_dataset, render_dataset, best_enc, "test", log=not self.config['Global']["wandb_project"] is None)
             print("Test set testing complete.")
 
         # optionally infer hard negatives (turned on by default, highly recommend to facilitate hard negative training)
@@ -722,7 +767,7 @@ class Recognizer:
                     print("Intermediate accuracy: ",acc)
                     if wandb_log:
                         wandb.log({f"val/{self.type}/acc": acc})
-                    if acc>zs_accuracy:
+                    if acc > zs_accuracy:
                         self.save_model(self.config['Recognizer'][self.type]["model_output_dir"], model, "best_cer", self.datapara)
                         zs_accuracy=acc
 
@@ -810,16 +855,14 @@ class Recognizer:
         return tester.get_all_embeddings(dataset, model)
 
 
-    @staticmethod
-    def encode_path_naming_convention(self, image_containing_anno_filename, anno_text):
+    def encode_path_naming_convention(self, image_containing_anno_filename, anno_text, x, y):
         file_stem = os.path.splitext(image_containing_anno_filename)[0]
         if self.type == "char":
-            return f"PAIRED-{file_stem}-char-{str_to_ord_str(anno_text)}.png"
+            return f"PAIRED-{file_stem}-{x}_{y}-char-{str_to_ord_str(anno_text)}.png"
         else:
-            return f"PAIRED-{file_stem}-word-{str_to_ord_str(anno_text)}.png"
+            return f"PAIRED-{file_stem}-{x}_{y}-word-{str_to_ord_str(anno_text)}.png"
 
  
-    @staticmethod
     def decode_path_naming_convention(self, path_name):
         if self.type == "char":
             return path_name.split("-char-")[1].split(".")[0]

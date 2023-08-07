@@ -35,12 +35,12 @@ class EffOCR:
         self.data_dir = data_dir
         self.config = self._load_config(config_yaml)
 
-        if self.config['Recognizer']['char_only'] and self.config['Global']['recognition_only']:
+        if self.config['Global']['char_only'] and self.config['Global']['recognition_only']:
             self.char_model = self._initialize_char_recognizer()
         elif self.config['Global']['recognition_only']:
             self.word_model = self._initialize_word_recognizer()
             self.char_model = self._initialize_char_recognizer()
-        elif self.config['Recognizer']['char_only']:
+        elif self.config['Global']['char_only']:
             self.char_model = self._initialize_char_recognizer()
             self.line_model = self._initialize_line()
             self.localizer_model = self._initialize_localizer()

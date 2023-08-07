@@ -147,12 +147,18 @@ class HardNegativeClassSamplerChar(Sampler):
         print(f"Number of hard negative sets: {len(hardnegs)}")
 
         self.all_labels_for_negs = []
+
         for hns in hardnegs:
-            ##Split hard negs by |
-            hns=hns.split("|")
-            lab_neg_set = [classidx[c] for c in hns]
-            assert len(lab_neg_set) == hns_set_size
-            self.all_labels_for_negs.append(lab_neg_set)
+            try:
+                lab_neg_set = [classidx[str(ord(c))] for c in hns]
+                assert len(lab_neg_set) == hns_set_size
+                self.all_labels_for_negs.append(lab_neg_set)
+            except KeyError:
+                ##Split hard negs by |
+                hns = hns.split("|")
+                lab_neg_set = [classidx[c] for c in hns]
+                assert len(lab_neg_set) == hns_set_size
+                self.all_labels_for_negs.append(lab_neg_set)
         
         self.batch_size = batch_size
         self.m_per_class = m
@@ -191,6 +197,7 @@ class HardNegativeClassSamplerChar(Sampler):
                     indices_remaining_dict[label] -= set(randchoice)
                     hn_idx_for_batch.extend(randchoice)
             all_hn_indices.append(hn_idx_for_batch)
+
         
         for hni in all_hn_indices:
             ridx = c_f.NUMPY_RANDOM.choice(range(0, len(_idx_list), self.batch_size))

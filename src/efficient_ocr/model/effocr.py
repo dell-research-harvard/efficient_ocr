@@ -65,12 +65,14 @@ class EffOCR:
             self.char_model = self._initialize_char_recognizer()
         elif self.config['Global']['char_only']:
             self.char_model = self._initialize_char_recognizer()
-            self.line_model = self._initialize_line()
+            if not self.config['Global']['skip_line_detection']:
+                self.line_model = self._initialize_line()
             self.localizer_model = self._initialize_localizer()
         else:
             self.word_model = self._initialize_word_recognizer()
             self.char_model = self._initialize_char_recognizer()
-            self.line_model = self._initialize_line()
+            if not self.config['Global']['skip_line_detection']:
+                self.line_model = self._initialize_line()
             self.localizer_model = self._initialize_localizer()
         
 

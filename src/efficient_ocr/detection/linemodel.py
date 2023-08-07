@@ -12,6 +12,7 @@ import cv2
 from math import floor, ceil
 import yolov5
 from yolov5 import train
+from huggingface_hub import hf_hub_download
 from collections import defaultdict
 
 from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, get_onnx_input_name, initialize_onnx_model
@@ -69,6 +70,9 @@ class LineModel:
         Returns:
             _type_: _description_
         """
+        if self.config['Line']['huggingface_model'] is not None:
+            self.config['Line']['model_path'] = hf_hub_download(self.config['Line']['huggingface_model'])
+
         if self.config['Line']['model_backend'] == 'yolo':
             self.model = yolov5.load(self.config['Line']['model_path'], device='cpu')
             self.model.conf = self.config['Line']['conf_thresh']  # NMS confidence threshold

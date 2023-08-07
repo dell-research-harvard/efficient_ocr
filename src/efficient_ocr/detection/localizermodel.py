@@ -12,6 +12,7 @@ from collections import defaultdict
 import threading
 import torch
 import queue
+from huggingface_hub import hf_hub_download
 import multiprocessing
 from mmdet.apis import init_detector, inference_detector
 
@@ -94,6 +95,9 @@ class LocalizerModel:
         Returns:
             _type_: _description_
         """
+        if self.config['Localizer']['huggingface_model'] is not None:
+            self.config['Localizer']['model_path'] = hf_hub_download(self.config['Localizer']['huggingface_model'])
+
         if self.config['Localizer']['model_backend'] == 'yolo':
             self.model = yolov5.load(self.config['Localizer']['model_path'], device='cpu')
             self.model.conf = self.config['Localizer']['conf_thresh']  # NMS confidence threshold
@@ -168,7 +172,7 @@ class LocalizerModel:
             preds = preds.pred[0]
             bboxes, confs, labels = preds[:, :4], preds[:, -2], preds[:, -1]
             
-            if self.config['Global']['language'] == 'en':
+            if not self.config['Localizer']['vertical']:
                 char_bboxes, word_bboxes = bboxes[labels == 0], bboxes[labels == 1]
                 if word_bboxes.shape[0] > 0:
                     char_bboxes, word_bboxes, word_char_overlap = en_preprocess(char_bboxes, word_bboxes)
@@ -182,7 +186,7 @@ class LocalizerModel:
                 else:
                     side_dists[bbox_idx]['l_dists'][im_idx] = None; side_dists[bbox_idx]['r_dists'][im_idx] = None
             else:
-                raise NotImplementedError('Only English is currently supported!')
+                raise NotImplementedError('Only English (horizontal) is currently supported!')
             
             for i, bbox in enumerate(word_bboxes):
                 x0, y0, x1, y1 = torch.round(bbox)

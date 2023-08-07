@@ -19,3 +19,7 @@ def test_effocr_single():
 #     effocr = EffOCR(data_json, config_json, pretrained='en_locca')
 #     results = effocr.infer(r'C:\Users\bryan\Documents\NBER\datasets\paragraph_breaks\raw_imgs', make_coco_annotations=r'C:\Users\bryan\Documents\NBER\efficient_ocr\data\coco_annotations_multi.json')
     
+
+import effocr
+engine = effocr.EffOCR('config.yaml')
+results = engine.infer('image.jpg')

@@ -96,7 +96,7 @@ class LocalizerModel:
             _type_: _description_
         """
         if self.config['Localizer']['huggingface_model'] is not None:
-            self.config['Localizer']['model_path'] = hf_hub_download(self.config['Localizer']['huggingface_model'])
+            self.config['Localizer']['model_path'] = hf_hub_download('/'.join(self.config['Localizer']['huggingface_model'].split('/')[:-1]), self.config['Localizer']['huggingface_model'].split('/')[-1])
 
         if self.config['Localizer']['model_backend'] == 'yolo':
             self.model = yolov5.load(self.config['Localizer']['model_path'], device='cpu')

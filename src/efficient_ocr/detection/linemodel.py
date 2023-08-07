@@ -71,7 +71,7 @@ class LineModel:
             _type_: _description_
         """
         if self.config['Line']['huggingface_model'] is not None:
-            self.config['Line']['model_path'] = hf_hub_download(self.config['Line']['huggingface_model'])
+            self.config['Line']['model_path'] = hf_hub_download('/'.join(self.config['Line']['huggingface_model'].split('/')[:-1]), self.config['Line']['huggingface_model'].split('/')[-1])
 
         if self.config['Line']['model_backend'] == 'yolo':
             self.model = yolov5.load(self.config['Line']['model_path'], device='cpu')
@@ -82,7 +82,7 @@ class LineModel:
             self.model.max_det = self.config['Line']['max_det']  # maximum number of detections per image
 
         elif self.config['Line']['model_backend'] == 'onnx':
-            self.model, self.input_name, self.input_shape = initialize_onnx_model(self.config['Line']['model_path'], self.config)
+            self.model, self._input_name, self._input_shape = initialize_onnx_model(self.config['Line']['model_path'], self.config['Line'])
 
         elif self.config['Line']['model_backend'] == 'mmdetection':
             raise NotImplementedError('mmdetection not yet implemented!')
@@ -121,7 +121,7 @@ class LineModel:
         #YOLO NMS is carried out now, other backends will filter by bbox confidence score later
         if self.config['Line']['model_backend'] == 'onnx':  
             preds = [torch.from_numpy(pred[0]) for pred in results]
-            preds = [yolov5_non_max_suppression(pred, conf_thres = self._conf_thresh, iou_thres=self._iou_thresh, max_det=100)[0] for pred in preds]
+            preds = [yolov5_non_max_suppression(pred, conf_thres = self.config['Line']['conf_thresh'], iou_thres=self.config['Line']['iou_thresh'], max_det=self.config['Line']['max_det'])[0] for pred in preds]
 
         elif self.config['Line']['model_backend'] == 'yolo':
             preds = [result.pred[0] for result in results]
@@ -216,7 +216,7 @@ class LineModel:
              
     def format_line_img(self, img):
         if self.config['Line']['model_backend'] == 'onnx':
-            im = letterbox(img, self.config['Line']['input_shape'], stride=32, auto=False)[0]  # padded resize
+            im = letterbox(img, stride=32, auto=False)[0]  # padded resize
             im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
             im = np.ascontiguousarray(im)  # contiguous
             im = im.astype(np.float32) / 255.0  # 0 - 255 to 0.0 - 1.0

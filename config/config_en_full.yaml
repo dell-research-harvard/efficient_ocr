@@ -108,17 +108,17 @@ Localizer:
   visualize: 
   num_cores: 
   max_det: 200
-  language: en
   vertical: False
   training_name: effocr_localizer
   epochs: 50
   batch_size: 16
   vertical: False
   device: cpu
+  huggingface_model: 
 
 
 Line:
-  model_path: ./models/yolo/line_model.pt
+  model_path: 
   iou_thresh: 0.15
   conf_thresh: 0.20
   num_cores:
@@ -132,3 +132,4 @@ Line:
   epochs: 50
   batch_size: 16
   device: cpu
+  huggingface_model: dell-research-harvard/effocr_en/line_model.pt

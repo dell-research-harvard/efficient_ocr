@@ -12,7 +12,7 @@ def test_effocr_single():
     config_file = r'.\config\config_en_full.yaml'
     effocr = EffOCR(data_json, image_dir, config_file)
     results = effocr.infer(r'.\tests\fixtures\test_locca_image.jpg', make_coco_annotations=True)
-
+    print(results[0].text)
     assert results[0].text.startswith('The tug boat')
 
 # def test_effocr_dir():

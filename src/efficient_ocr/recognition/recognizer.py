@@ -186,7 +186,6 @@ class Recognizer:
 
 
     def initialize_model(self):
-        print(os.path.abspath(self.config['Recognizer'][self.type]['index_path']))
         self.index = faiss.read_index(self.config['Recognizer'][self.type]['index_path'])
         with open(self.config['Recognizer'][self.type]['candidates_path'], 'r') as f:
             self.candidates = f.read().splitlines()

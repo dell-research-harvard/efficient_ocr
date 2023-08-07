@@ -14,7 +14,7 @@ import torch
 import queue
 from huggingface_hub import hf_hub_download
 import multiprocessing
-from mmdet.apis import init_detector, inference_detector
+# from mmdet.apis import init_detector, inference_detector
 
 
 from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, en_preprocess, initialize_onnx_model

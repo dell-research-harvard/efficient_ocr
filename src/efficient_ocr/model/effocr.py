@@ -40,12 +40,12 @@ class EffOCR:
             with open(data_json, 'r') as f:
                 self.data_json = json.load(f)
         else:
-            data_json = {}
+            self.data_json = {}
 
         if data_dir is not None:
             self.data_dir = data_dir
         else:
-            data_dir = os.getcwd()
+            self.data_dir = os.getcwd()
             
         self.config = self._load_config(config_yaml)
 

@@ -5,17 +5,17 @@ Global:
 
 Recognizer:
   char:
-    model_output_dir: ./effocr_package_test_tk_mobilenet_FS_HNS
+    model_output_dir: ./effocr_package_test_tk_edgenext_5shot
     font_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/japan_font_files
     model_backend: timm
-    timm_model_name: mobilenetv3_small_050.lamb_in1k
+    timm_model_name: edgenext_xx_small.in1k
     render_dict: 
       - /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/japan_charsets/adobe_1_7_unicodes.txt
       - /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/japan_charsets/jisx0213_unicodes.txt
     ready_to_go_data_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_char_crops/tk
     pretrained_model_dir:
     train_val_test_split: [0.7, 0.15, 0.15]
-    few_shot: 1
+    few_shot: 5
     batch_size: 128
     lr: 2.0e-3
     dec_lr_factor: 0.9
@@ -26,7 +26,7 @@ Recognizer:
     temp: 0.1
     start_epoch: 1
     m: 4
-    imsize: 224
+    imsize: 256
     char_trans_version: 1
     hardneg_k: 8
     num_passes: 1
@@ -44,8 +44,9 @@ Recognizer:
     char_only_sampler: False
     aug_paired: False
     int_eval_steps:
-    hns_txt_path: ./effocr_package_test_tk_mobilenet_FS/hns.txt
+    hns_txt_path:
     epoch_viz_dir:
     train_set_from_coco_json: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_datasets/teikoku/combined/train70.json
     val_set_from_coco_json: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_datasets/teikoku/combined/val15.json
     test_set_from_coco_json: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/ocr_datasets/teikoku/combined/test15.json
+    huggingface_model:

@@ -44,6 +44,12 @@ setup(name         = "efficient_ocr",
         "iopath",
         "pdfplumber",
         "pdf2image",
+        'onnxruntime',
+        'onnx', 
+        'faiss-cpu',
+        'yolov5',
+        'timm',
+        'huggingface_hub'
       ],
       include_package_data=True
       )

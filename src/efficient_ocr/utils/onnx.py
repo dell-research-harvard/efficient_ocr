@@ -6,6 +6,7 @@ def initialize_onnx_model(model_path, config):
     """
     Initializes an ONNX model from a path to an ONNX file.
     """
+    
     model_path = model_path
     sess_options = ort.SessionOptions()
     if config['num_cores'] is not None:

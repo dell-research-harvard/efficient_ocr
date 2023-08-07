@@ -13,7 +13,7 @@ Recognizer:
     render_dict: 
       - /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/japan_charsets/adobe_1_7_unicodes.txt
       - /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/japan_charsets/jisx0213_unicodes.txt
-    ready_to_go_data_dir_path: /content/drive/ocr_char_crops/tk
+    ready_to_go_data_dir_path: /content/drive/MyDrive/ocr_char_crops/tk
     pretrained_model_dir:
     train_val_test_split: [0.7, 0.15, 0.15]
     few_shot: 10

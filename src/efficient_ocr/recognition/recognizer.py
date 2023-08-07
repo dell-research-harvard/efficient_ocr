@@ -412,7 +412,7 @@ class Recognizer:
             json.dump(test_paired_image_paths, f)
 
         unique_test = [y.split('/')[-2] for y in [x['file_name'] for x in test_paired_image_paths['images']]]
-        print(f"Distinct train chars appearing in test: {len(set(unique_train).intersection(set(unique_test)))}/{len(unique_test)}")
+        print(f"Distinct train chars appearing in test: {len(set(unique_train).intersection(set(unique_test)))}/{len(set(unique_test))}")
 
         return train_paired_image_json_path, val_paired_image_json_path, test_paired_image_json_path
 

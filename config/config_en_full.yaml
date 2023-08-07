@@ -2,6 +2,7 @@ Global:
   wandb_project: effocr_package_test_locca
   recognition_only: false
   char_only: false
+  skip_line_detection: false
 
 Recognizer:
   word:

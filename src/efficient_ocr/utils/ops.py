@@ -335,7 +335,7 @@ COCO_TEMPLATE = {'images': [],
 
 ANNOTATION_TEMPLATE = {'segmentation': [], 'area': None, 'bbox': [], 'iscrowd': 0, 'image_id': None, 'category_id': None, 'id': None}
 
-def make_coco_from_effocr_result(result, imgs, save_path = None):
+def make_coco_from_effocr_result(result, imgs, save_path = None, skip_lines = False, char_only = False):
     '''
     Takes in an effocr result in the format:
         { bbox_idx: {

@@ -3,17 +3,23 @@ import numpy as np
 
 END_PUNCTUATION = '.?!,;:"\''
 
-def infer_chars(word_results, recognizer):
+def infer_chars(word_results, recognizer, char_only=False):
     # Assemble all the char crops from the results dictionary into a list
     char_crops = []
     for bbox_idx in word_results.keys():
-        for line_idx in word_results[bbox_idx].keys():
-            for i, p in enumerate(word_results[bbox_idx][line_idx]['word_preds']):
-                if p is not None:
-                    continue
-                else:
-                    for overlap in word_results[bbox_idx][line_idx]['overlaps'][i]:
-                        char_crops.append(word_results[bbox_idx][line_idx]['chars'][overlap][0])
+        if not char_only:
+            for line_idx in word_results[bbox_idx].keys():
+                for i, p in enumerate(word_results[bbox_idx][line_idx]['word_preds']):
+                    if p is not None:
+                        continue
+                    else:
+                        for overlap in word_results[bbox_idx][line_idx]['overlaps'][i]:
+                            char_crops.append(word_results[bbox_idx][line_idx]['chars'][overlap][0])
+        else:
+            for line_idx in word_results[bbox_idx].keys():
+
+                for i, c in enumerate(word_results[bbox_idx][line_idx]['chars']):
+                    char_crops.append(word_results[bbox_idx][line_idx]['chars'][i][0])
 
     # Get the recognizer results from those chars
     results = recognizer.run(char_crops)
@@ -23,28 +29,36 @@ def infer_chars(word_results, recognizer):
     results_idx = 0
     for bbox_idx in word_results.keys():
         for line_idx in word_results[bbox_idx].keys():
-            for i, p in enumerate(word_results[bbox_idx][line_idx]['word_preds']):
-                if p is not None:
-                    continue
-                else:
-                    word = ''
-                    for _ in range(len(word_results[bbox_idx][line_idx]['overlaps'][i])):
-                        word += results[results_idx]
-                        results_idx += 1
-                    word_results[bbox_idx][line_idx]['word_preds'][i] = word
+            if not char_only:
+                for i, p in enumerate(word_results[bbox_idx][line_idx]['word_preds']):
+                    if p is not None:
+                        continue
+                    else:
+                        word = ''
+                        for _ in range(len(word_results[bbox_idx][line_idx]['overlaps'][i])):
+                            word += results[results_idx]
+                            results_idx += 1
+                        word_results[bbox_idx][line_idx]['word_preds'][i] = word
+            else:
+                for i in range(len(word_results[bbox_idx][line_idx]['chars'])):
+                    word_results[bbox_idx][line_idx]['word_preds'][i] = results[results_idx]
+                    results_idx += 1
+
+            
     
     # Add final punctuation to the end of each word
-    for bbox_idx in word_results.keys():
-        for line_idx in word_results[bbox_idx].keys():
-            for i, p in enumerate(word_results[bbox_idx][line_idx]['final_puncs']):
-                if p is not None:
-                    word_results[bbox_idx][line_idx]['word_preds'][i] += p
-            
-            if word_results[bbox_idx][line_idx]['para_end']:
-                if len(word_results[bbox_idx][line_idx]['word_preds']) > 0:
-                    word_results[bbox_idx][line_idx]['word_preds'][-1] += '\n'
-                else:
-                    word_results[bbox_idx][line_idx]['word_preds'].append('\n')
+    if not char_only:
+        for bbox_idx in word_results.keys():
+            for line_idx in word_results[bbox_idx].keys():
+                for i, p in enumerate(word_results[bbox_idx][line_idx]['final_puncs']):
+                    if p is not None:
+                        word_results[bbox_idx][line_idx]['word_preds'][i] += p
+                
+                if word_results[bbox_idx][line_idx]['para_end']:
+                    if len(word_results[bbox_idx][line_idx]['word_preds']) > 0:
+                        word_results[bbox_idx][line_idx]['word_preds'][-1] += '\n'
+                    else:
+                        word_results[bbox_idx][line_idx]['word_preds'].append('\n')
 
     return word_results
 

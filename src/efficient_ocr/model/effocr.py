@@ -4,6 +4,7 @@ EffOCR Main Class
 import json
 import numpy as np
 import yaml
+from collections import defaultdict
 import os
 import cv2
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
@@ -101,7 +102,10 @@ class EffOCR:
     def _postprocess(self, results, **kwargs):
         full_results = [None] * len(results.keys())
         for bbox_idx in results.keys():
-            full_text = '\n'.join([' '.join(results[bbox_idx][i]['word_preds']) for i in range(len(results[bbox_idx]))])
+            if not self.config['Global']['char_only']:
+                full_text = '\n'.join([' '.join(results[bbox_idx][i]['word_preds']) for i in range(len(results[bbox_idx]))])
+            else:
+                full_text = '\n'.join([results[bbox_idx][i]['char_preds'] for i in range(len(results[bbox_idx]))])
             full_results[bbox_idx] = EffOCRResult(full_text, results[bbox_idx])
 
         return full_results
@@ -200,9 +204,12 @@ class EffOCR:
                 mapping the index of the original image (in the order they were passed from the above function) to a list of tuples, 
                 with each tuple in the format (textline img, (bounding box coordinates (y0, x0, y1, x1)))
         '''
-
-        line_results = self.line_model(imgs, **kwargs) 
-
+        if not self.config['Global']['skip_line_detection']:
+            line_results = self.line_model(imgs, **kwargs) 
+        else:
+            line_results = defaultdict(list)
+            for i, img in enumerate(imgs):
+                line_results[i].append((img, (0, 0, img.shape[0], img.shape[1])))
         '''
         Word and character localization:
             Input: detections as a defaultdict(list) as described above
@@ -243,9 +250,9 @@ class EffOCR:
                 Where 'final_puncs' is a list with the same length as the word list for each entry, with the predicted final character of each word, if it is a punctuation mark. 
                 If a punctuation mark was detected, all of the characters list, the overlaps object, and the word image and bounding boxes will be adjusted to reflect that detection. 
         '''
-
-        # TODO: skip on language from config
-        last_char_results = infer_last_chars(localizer_results, self.char_model, **kwargs) # Passes back detections and cropped images
+        if not self.config['Global']['char_only']:
+            # TODO: skip on language from config
+            last_char_results = infer_last_chars(localizer_results, self.char_model, **kwargs) # Passes back detections and cropped images
 
         '''
         Word Recognition: 
@@ -273,8 +280,9 @@ class EffOCR:
 
         '''
 
-        # TODO: skip on language from config, work with skipped final punctuation step
-        word_results = infer_words(last_char_results, self.word_model, **kwargs) 
+        if not self.config['Global']['char_only']:
+            # TODO: skip on language from config, work with skipped final punctuation step
+            word_results = infer_words(last_char_results, self.word_model, **kwargs) 
 
         '''
         Character Recognition:
@@ -301,7 +309,7 @@ class EffOCR:
         '''
 
         # TODO: work with skipped word, last character on language from config
-        char_results = infer_chars(word_results, self.char_model, **kwargs) # Passes back predidctions
+        char_results = infer_chars(word_results, self.char_model, self.config['Global']['char_only'], **kwargs) # Passes back predidctions
 
         # TBD what we do for postprocessing (likely will be combining all line predictions within a bounding box into a single text, then returning those texts as a list)
         # Passes through for now. 
@@ -320,7 +328,8 @@ class EffOCR:
         if visualize is not None:
             visualize_effocr_result(imgs, 
                                     annotations_path = make_coco_annotations if isinstance(make_coco_annotations, str) else "./data/coco_annotations.json",
-                                    save_path=visualize if isinstance(visualize, str) else "./data/visualized_effocr_result.jpg")
+                                    save_path = visualize if isinstance(visualize, str) else "./data/visualized_effocr_result.jpg",
+                                    skip_lines = self.config['Global']['skip_line_detection'], char_only = self.config['Global']['char_only'])
 
 
         return final_results

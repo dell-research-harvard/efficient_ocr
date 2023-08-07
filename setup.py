@@ -53,7 +53,7 @@ setup(name         = "efficient_ocr",
         'kornia',
         'pytorch_metric_learning',
         'transformers',
-        
+        'wandb'
       ],
       include_package_data=True
       )

@@ -186,7 +186,8 @@ class LocalizerModel:
                 else:
                     side_dists[bbox_idx]['l_dists'][im_idx] = None; side_dists[bbox_idx]['r_dists'][im_idx] = None
             else:
-                raise NotImplementedError('Only English (horizontal) is currently supported!')
+                char_bboxes = bboxes[labels == 0]
+                char_bboxes = sorted(char_bboxes, key=lambda x: x[1])
             
             for i, bbox in enumerate(word_bboxes):
                 x0, y0, x1, y1 = torch.round(bbox)

@@ -714,7 +714,7 @@ class Recognizer:
 
         # ###Now, we want to take at most 10 paired paths per word
         ##First, let's make a dict of word to paths
-        print("preparing word paths dict")
+        print("Preparing word paths dict")
         word_to_paths = defaultdict(list)
         for path in tqdm(query_paths):
             word_to_paths[os.path.basename(path).split("-word-")[1].split(".")[0]].append(path)

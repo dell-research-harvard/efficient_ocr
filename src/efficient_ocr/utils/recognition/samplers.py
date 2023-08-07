@@ -251,7 +251,7 @@ class AllHNSamplerSplitBatchesPairRender(Sampler):
 
         self.batch_size = batch_size
         self.m_per_class = m
-        print("CHeck",int(self.m_per_class/2.0))
+        print("Check",int(self.m_per_class/2.0))
         self.hnset_per_batch = int(batch_size / (m*hns_set_size))
         self.hns_set_size=hns_set_size
 
@@ -354,8 +354,8 @@ class AllHNSamplerSplitBatchesPairRender(Sampler):
             i+=1
         
         print("Total number of hard negative sets: ", len(all_hn_indices))
-        print("example hard negative set: ", all_hn_indices[0], all_hn_indices[1])
-        print("example Length of a set" , len(all_hn_indices[0]))
+        print("Example hard negative set: ", all_hn_indices[0], all_hn_indices[1])
+        print("Example Length of a set" , len(all_hn_indices[0]))
                 
 
 

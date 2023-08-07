@@ -319,14 +319,13 @@ def render_all_synth_in_parallel(
     ##GEn symspell words
    
     words_to_generate=process_word_list(path_to_words=word_list_path) 
-    print("processes word list")
     
     # covered_symspell=render_save_word_list(symspell_words)
     covered_symspell=parallel_render_save_word_list(
         words_to_generate, font_paths, coverage_dict, save_path, num_processes=None,ascender_char=ascender_char)
     
     ###Now, we need to add the words that are in labels but not in the word list. 
-    print(len(covered_symspell), " images generated")
+    # print(len(covered_symspell), " images generated")
 
 
 # if __name__ == '__main__':

@@ -201,9 +201,9 @@ def create_dataset(
     if train_mode == "char":
         other_idx = [idx for idx, (p, t) in enumerate(dataset.data) if \
             not idx in paired_train_idx + paired_val_idx + paired_test_idx + render_idx]
-        print("total other idx: ", len(other_idx))
+        print("Total other idx: ", len(other_idx))
     
-    print(f"train len: {len(paired_train_idx)}\nval len: {len(paired_val_idx)}\ntest len: {len(paired_test_idx)}")
+    print(f"Train len: {len(paired_train_idx)}\nVal len: {len(paired_val_idx)}\nTest len: {len(paired_test_idx)}")
     assert len(set(paired_train_idx).intersection(set(paired_val_idx))) == 0
     assert len(set(paired_val_idx).intersection(set(paired_test_idx))) == 0
     assert len(set(paired_test_idx).intersection(set(paired_train_idx))) == 0
@@ -231,9 +231,9 @@ def create_dataset(
     val_stems = list(val_stems)
     test_stems = list(test_stems)
 
-    print("time to create indices: ", datetime.now() - end_time)
-    print(f"train len: {len(paired_train_idx)}")
-    print(f"render len: {len(render_idx)}")
+    print("Time to create indices: ", datetime.now() - end_time)
+    print(f"Train len: {len(paired_train_idx)}")
+    print(f"Tender len: {len(render_idx)}")
     
     if finetune:
         idx_train = sorted(paired_train_idx)

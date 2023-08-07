@@ -223,7 +223,7 @@ def create_dataset(
         paired_test_idx += other_test_idx
     """
     
-    print("total render idx: ", len(render_idx))
+    print("Total render idx: ", len(render_idx))
 
     train_stems = list(train_stems)
 

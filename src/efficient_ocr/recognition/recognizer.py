@@ -369,6 +369,8 @@ class Recognizer:
             for tp in all_train_paths:
                 cat = tp.split('/')[-2]
                 self.cat_path_dict[cat].append(tp)
+            unique_train = list(self.cat_path_dict.keys())
+            print(f"Distinct paired characters: {len(unique_train)}")
 
             few_shot_paired_image_paths = []
             for k, v in self.cat_path_dict.items():
@@ -408,6 +410,9 @@ class Recognizer:
         test_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_output_dir"], f"test_paired_image_paths.json")
         with open(test_paired_image_json_path, "w") as f:
             json.dump(test_paired_image_paths, f)
+
+        unique_test = [y.split('/')[-2] for y in [x['file_name'] for x in test_paired_image_paths['images']]]
+        print(f"Distinct train chars appearing in test: {len(set(unique_train).intersection(set(unique_test)))}/{len(unique_test)}")
 
         return train_paired_image_json_path, val_paired_image_json_path, test_paired_image_json_path
 

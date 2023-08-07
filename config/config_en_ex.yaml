@@ -1,6 +1,6 @@
 Global:
   wandb_project: effocr_package_test_locca
-  recognition_only: true
+  recognition_only: false
 
 Recognizer:
   char_only: false

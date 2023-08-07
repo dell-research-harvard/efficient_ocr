@@ -13,12 +13,15 @@ import threading
 import torch
 import queue
 import multiprocessing
+from mmdet.apis import init_detector, inference_detector
+
 
 from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, en_preprocess, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
 from ..utils import create_yolo_training_data, create_yolo_yaml
 
-DEFAULT_LOCALIZER_CONFIG = { 'localizer_model_path': './models/yolo/localizer_model.pt',
+DEFAULT_LOCALIZER_CONFIG = { 'localizer_model_path': './models/mmdet/cascade_locca.pth',
+                            'localizer_mmdet_config': './models/mmdet/cascade_locca_config.py',
                         'iou_thresh': 0.10,
                         'conf_thresh': 0.25, 
                         'num_cores': None,
@@ -37,6 +40,10 @@ def iteration(model, input):
     output = model(input)
     return output
 
+def mmdet_iteration(model, input):
+    output = inference_detector(model, input)
+    return output
+
 ''' Threaded Localizer Inference'''
 class LocalizerEngineExecutorThread(threading.Thread):
     def __init__(
@@ -44,16 +51,21 @@ class LocalizerEngineExecutorThread(threading.Thread):
         model,
         input_queue: queue.Queue,
         output_queue: queue.Queue,
+        backend: str = 'yolo',
     ):
         super(LocalizerEngineExecutorThread, self).__init__()
         self._model = model
         self._input_queue = input_queue
         self._output_queue = output_queue
+        self.backend = backend
 
     def run(self):
         while not self._input_queue.empty():
             bbox_idx, line_idx, img = self._input_queue.get()
-            output = iteration(self._model, img)
+            if self.backend != 'mmdetection':
+                output = iteration(self._model, img)
+            else:
+                output = mmdet_iteration(self._model, img)
             self._output_queue.put((bbox_idx, line_idx, output))
 
 
@@ -112,7 +124,19 @@ class LocalizerModel:
             self.model, self.input_name, self.input_shape = initialize_onnx_model(self.config['localizer_model_path'], self.config)
 
         elif self.config['model_backend'] == 'mmdetection':
-            raise NotImplementedError('mmdetection not yet implemented!')
+            if self.config['localizer_mmdet_config'] is None:
+                raise ValueError('Must specify a mmdetection config file for mmdetection models!')
+            loc_mmdet_config = {
+                    "model.rpn_head.anchor_generator.scales":[2,8,32],
+                    "classes":('char','word'), "data.train.classes":('char','word'), 
+                    "data.val.classes":('char','word'), "data.test.classes":('char','word'),
+                    "model.roi_head.bbox_head.0.num_classes": 2,
+                    "model.roi_head.bbox_head.1.num_classes": 2,
+                    "model.roi_head.bbox_head.2.num_classes": 2,
+                    "model.roi_head.mask_head.num_classes": 2,
+                }
+            self.localizer = init_detector(self.config['localizer_mmdet_config'], self.config['localizer_model_path'], device='cpu', cfg_options=loc_mmdet_config)
+
         else:
             raise ValueError('Invalid model backend specified! Must be one of yolo, onnx, or mmdetection')
         

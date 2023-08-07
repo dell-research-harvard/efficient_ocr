@@ -8,15 +8,16 @@ import os
 
 def test_effocr_single():
     data_json = r'.\data\coco_ex.json'
-    config_json = r'.\config\config_ex.json'
-    effocr = EffOCR(data_json, config_json, pretrained='en_locca')
+    image_dir = r'.\tests\fixtures'
+    config_file = r'.\config\config_en_ex.yaml'
+    effocr = EffOCR(data_json, image_dir, config_file, pretrained='en_locca')
     results = effocr.infer(r'.\tests\fixtures\test_locca_image.jpg', make_coco_annotations=True)
 
     assert results[0].text.startswith('The tug boat')
 
-def test_effocr_dir():
-    data_json = r'.\data\coco_ex.json'
-    config_json = r'.\config\config_ex.json'
-    effocr = EffOCR(data_json, config_json, pretrained='en_locca')
-    results = effocr.infer(r'C:\Users\bryan\Documents\NBER\datasets\paragraph_breaks\raw_imgs', make_coco_annotations=r'C:\Users\bryan\Documents\NBER\efficient_ocr\data\coco_annotations_multi.json')
+# def test_effocr_dir():
+#     data_json = r'.\data\coco_ex.json'
+#     config_json = r'.\config\config_ex.json'
+#     effocr = EffOCR(data_json, config_json, pretrained='en_locca')
+#     results = effocr.infer(r'C:\Users\bryan\Documents\NBER\datasets\paragraph_breaks\raw_imgs', make_coco_annotations=r'C:\Users\bryan\Documents\NBER\efficient_ocr\data\coco_annotations_multi.json')
     

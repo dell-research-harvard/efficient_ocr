@@ -49,7 +49,11 @@ setup(name         = "efficient_ocr",
         'faiss-cpu',
         'yolov5',
         'timm',
-        'huggingface_hub'
+        'huggingface_hub',
+        'kornia',
+        'pytorch_metric_learning',
+        'transformers',
+        
       ],
       include_package_data=True
       )

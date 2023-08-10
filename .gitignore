@@ -1,6 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 
 # C extensions
@@ -187,3 +188,7 @@ tests/effocr/wandb/**
 src/efficient_ocr/__pycache__/**
 tests/effocr/effocr_package_test_locca_char*/**
 tests/effocr/effocr_package_test_locca_word*/**
+
+# vscode
+.vscode/
+*.code-workspace

@@ -17,8 +17,7 @@ def draw_rectangles(img, rectangles, color = (0, 255, 0), thickness = 2):
 
 def test_line_det():
     test_img = cv2.imread(r'./tests/fixtures/test_locca_image.jpg')
-    config = {}
-    model = LineModel(config)
+    model = LineModel('./config/config_en_full.yaml')
     line_results = model([test_img])
 
     assert isinstance(line_results, defaultdict)

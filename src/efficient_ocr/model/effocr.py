@@ -40,12 +40,12 @@ class EffOCR:
             with open(data_json, 'r') as f:
                 self.data_json = json.load(f)
         else:
-            data_json = {}
+            self.data_json = {}
 
         if data_dir is not None:
             self.data_dir = data_dir
         else:
-            data_dir = os.getcwd()
+            self.data_dir = os.getcwd()
             
         self.config = self._load_config(config_yaml)
 
@@ -330,8 +330,8 @@ class EffOCR:
         if visualize is not None:
             visualize_effocr_result(imgs, 
                                     annotations_path = make_coco_annotations if isinstance(make_coco_annotations, str) else "./data/coco_annotations.json",
-                                    save_path = visualize if isinstance(visualize, str) else "./data/visualized_effocr_result.jpg",
-                                    skip_lines = self.config['Global']['skip_line_detection'], char_only = self.config['Global']['char_only'])
+                                    save_path = visualize if isinstance(visualize, str) else "./data/visualized_effocr_result.jpg")
+                                    # skip_lines = self.config['Global']['skip_line_detection'], char_only = self.config['Global']['char_only']
 
 
         return final_results

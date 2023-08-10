@@ -1,5 +1,5 @@
 Global:
-  wandb_project: effocr_package_test_locca
+  wandb_project:
   recognition_only: false
   char_only: false
   skip_line_detection: false

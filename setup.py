@@ -23,7 +23,7 @@ libinfo_content = open(libinfo_py, 'r', encoding='utf8').readlines()
 # exec(version_line)  # gives __version__
 
 setup(name         = "efficient_ocr",
-      version      = "0.0.1",
+      version      = "0.0.3",
       author       = "Tom Bryan, Abhishek Arora, Jacob Carlson",
       author_email = "bryanptom@gmail.com",
       license      = "Apache-2.0",
@@ -53,6 +53,7 @@ setup(name         = "efficient_ocr",
         'kornia',
         'pytorch_metric_learning',
         'transformers',
+        'albumentations',
         'wandb'
       ],
       include_package_data=True

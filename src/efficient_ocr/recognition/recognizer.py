@@ -316,7 +316,7 @@ class Recognizer:
             render_all_synth_in_parallel(
                 self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"], 
                 self.config['Recognizer'][self.type]["font_dir_path"], 
-                self.config['Recognizer'][self.type]["render_dict"], 
+                glob(os.path.join(f"{self.config['Recognizer'][self.type]['render_dict']}", "*")), 
                 self.config['Recognizer'][self.type]["ascender"]
             )
 

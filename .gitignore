@@ -173,6 +173,7 @@ data/
 
 # Some test fixtures
 tests/fixtures/
+tests/
 
 
 # yolo results

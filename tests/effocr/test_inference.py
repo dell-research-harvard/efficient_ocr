@@ -36,13 +36,13 @@ from efficient_ocr.recognition import Recognizer, infer_last_chars, infer_words,
 
 # TODO: These really should be pulled from a saved file, or from the model zoo directly...the keyed solution is temporary
 TEST_COLLECTIONS = {
-    'line_detection_en_yolov5_onnx': '/tests/fixtures/inference/line_det_en',
-    'line_detection_jp': '/tests/fixtures/inference/line_det_jp',
-    'localization_en': '/tests/fixtures/inference/localization_en',
-    'localization_jp': '/tests/fixtures/inference/localization_jp',
-    'word_recognition_en': '/tests/fixtures/inference/word_recognition_en',
-    'char_recognition_en': '/tests/fixtures/inference/char_recognition_en',
-    'char_recognition_jp': '/tests/fixtures/inference/char_recognition_jp'
+    'line_detection_en_yolov5_onnx': './tests/fixtures/inference/line_det_en',
+    'line_detection_jp': './tests/fixtures/inference/line_det_jp',
+    'localization_en': './tests/fixtures/inference/localization_en',
+    'localization_jp': './tests/fixtures/inference/localization_jp',
+    'word_recognition_en': './tests/fixtures/inference/word_recognition_en',
+    'char_recognition_en': './tests/fixtures/inference/char_recognition_en',
+    'char_recognition_jp': './tests/fixtures/inference/char_recognition_jp'
 }
 
 TEST_CONFIGS = {
@@ -60,7 +60,7 @@ def load_inference_images(collection):
             images.append(cv2.imread(os.path.join(collection, img)))
     return images
 
-def load_config(self, config_yaml, **kwargs):
+def load_config(config_yaml):
     if isinstance(config_yaml, str):
         with open(config_yaml, 'r') as f:
             config = yaml.safe_load(f)
@@ -68,6 +68,8 @@ def load_config(self, config_yaml, **kwargs):
         config = config_yaml
     else:
         raise ValueError('config_yaml must be a path to a yaml file or a dictionary')
+    
+    return config
 
 
 def draw_rectangles_on_image(img, rectangles, color = (0, 255, 0), thickness = 2):

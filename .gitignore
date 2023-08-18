@@ -172,8 +172,8 @@ models/
 data/
 
 # Some test fixtures
-tests/fixtures/lines/
-tests/fixtures/localizer/
+tests/fixtures/
+
 
 # yolo results
 runs/

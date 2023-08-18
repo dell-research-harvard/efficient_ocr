@@ -1,0 +1,23 @@
+Global:
+  wandb_project: effocr_package_test_locca
+  recognition_only: false
+  char_only: false
+  skip_line_detection: false
+
+Line:
+  model_path: ./models/yolo/line_model.pt
+  iou_thresh: 0.15
+  conf_thresh: 0.20
+  num_cores:
+  providers:
+  input_shape: (640, 640)
+  model_backend: yolov5
+  min_seg_ratio: 2
+  visualize: 
+  max_det: 200
+  training_name: effocr_line
+  epochs: 50
+  batch_size: 16
+  device: cpu
+  huggingface_model: 
+  onnx: false

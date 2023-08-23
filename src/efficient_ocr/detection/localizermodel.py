@@ -38,7 +38,7 @@ class LocalizerEngineExecutorThread(threading.Thread):
         model,
         input_queue: queue.Queue,
         output_queue: queue.Queue,
-        backend: str = 'yolo',
+        backend: str = 'yolov5',
     ):
         super(LocalizerEngineExecutorThread, self).__init__()
         self._model = model
@@ -98,7 +98,7 @@ class LocalizerModel:
         if self.config['Localizer']['huggingface_model'] is not None:
             self.config['Localizer']['model_path'] = hf_hub_download('/'.join(self.config['Localizer']['huggingface_model'].split('/')[:-1]), self.config['Localizer']['huggingface_model'].split('/')[-1])
 
-        if self.config['Localizer']['model_backend'] == 'yolo':
+        if self.config['Localizer']['model_backend'] == 'yolov5':
             self.model = yolov5.load(self.config['Localizer']['model_path'], device='cpu')
             self.model.conf = self.config['Localizer']['conf_thresh']  # NMS confidence threshold
             self.model.iou = self.config['Localizer']['iou_thresh']  # NMS IoU threshold
@@ -243,7 +243,7 @@ class LocalizerModel:
         return localizer_results
     
     def train(self, training_data, **kwargs):
-        if self.config['Localizer']['model_backend'] != 'yolo':
+        if self.config['Localizer']['model_backend'] != 'yolov5':
             raise NotImplementedError('Only YOLO model backend is currently supported for training!')
         
         for key, val in kwargs.items():

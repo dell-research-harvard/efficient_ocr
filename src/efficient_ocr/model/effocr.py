@@ -188,8 +188,9 @@ class EffOCR:
         if isinstance(imgs, str):
             if os.path.isdir(imgs):
                 imgs = [os.path.join(imgs, img) for img in os.listdir(imgs)]
-            elif os.path.isfile(imgs):
+            else: # Assume that the file exists
                 imgs = [imgs]
+
         elif isinstance(imgs, np.ndarray):
             imgs = [imgs]
         elif not isinstance(imgs, list):

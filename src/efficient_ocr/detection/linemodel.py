@@ -73,7 +73,7 @@ class LineModel:
         if self.config['Line']['huggingface_model'] is not None:
             self.config['Line']['model_path'] = hf_hub_download('/'.join(self.config['Line']['huggingface_model'].split('/')[:-1]), self.config['Line']['huggingface_model'].split('/')[-1])
 
-        if self.config['Line']['model_backend'] == 'yolo':
+        if self.config['Line']['model_backend'] == 'yolov5':
             self.model = yolov5.load(self.config['Line']['model_path'], device='cpu')
             self.model.conf = self.config['Line']['conf_thresh']  # NMS confidence threshold
             self.model.iou = self.config['Line']['iou_thresh']  # NMS IoU threshold
@@ -109,7 +109,7 @@ class LineModel:
         
         if self.config['Line']['model_backend'] == 'onnx':    
             results = [self.model.run(None, {self._input_name: img}) for img in imgs]
-        elif self.config['Line']['model_backend'] == 'yolo':
+        elif self.config['Line']['model_backend'] == 'yolov5':
             results = [self.model(img, augment=False) for img in imgs]
         elif self.config['Line']['model_backend'] == 'mmdetection':
             raise NotImplementedError('mmdetection not yet implemented!')
@@ -123,7 +123,7 @@ class LineModel:
             preds = [torch.from_numpy(pred[0]) for pred in results]
             preds = [yolov5_non_max_suppression(pred, conf_thres = self.config['Line']['conf_thresh'], iou_thres=self.config['Line']['iou_thresh'], max_det=self.config['Line']['max_det'])[0] for pred in preds]
 
-        elif self.config['Line']['model_backend'] == 'yolo':
+        elif self.config['Line']['model_backend'] == 'yolov5':
             preds = [result.pred[0] for result in results]
 
         elif self._model_backend == 'mmdetection':
@@ -177,7 +177,7 @@ class LineModel:
                     line_proj_crops.append((x0, y0, x1, y1))
 
             # No need to rescale when using yolo natively
-            elif self.config['Line']['model_backend'] == 'yolo':
+            elif self.config['Line']['model_backend'] == 'yolov5':
                 line_proj_crops = []
                 for line_bbox in line_bboxes:
                     x0, y0, x1, y1 = torch.round(line_bbox)
@@ -223,7 +223,7 @@ class LineModel:
             if im.ndim == 3:
                 im = np.expand_dims(im, 0)
         
-        elif self.config['Line']['model_backend'] == 'yolo':
+        elif self.config['Line']['model_backend'] == 'yolov5':
             im = img
 
         elif self.config['Line']['model_backend'] == 'mmdetection':
@@ -252,7 +252,7 @@ class LineModel:
 
     # TODO: Train
     def train(self, training_data, **kwargs):
-        if not self.config['Line']['model_backend'] == 'yolo':
+        if not self.config['Line']['model_backend'] == 'yolov5':
             raise NotImplementedError('Training is only implemented for yolo backend')
         
         for key, val in kwargs.items():

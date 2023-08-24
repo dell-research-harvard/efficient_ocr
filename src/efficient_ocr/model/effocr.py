@@ -10,7 +10,7 @@ import cv2
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
 from ..recognition import Recognizer, infer_last_chars, infer_words, infer_chars
 from ..detection import LineModel, LocalizerModel # , word_model, char_model
-from ..utils import make_coco_from_effocr_result, visualize_effocr_result
+from ..utils import make_coco_from_effocr_result, visualize_effocr_result, dictmerge, dictlistmerge, DEFAULT_CONFIG
 
 
 class EffOCRResult:
@@ -77,6 +77,7 @@ class EffOCR:
         
 
     def _load_config(self, config_yaml, **kwargs):
+        
         if isinstance(config_yaml, str):
             with open(config_yaml, 'r') as f:
                 config = yaml.safe_load(f)
@@ -85,10 +86,11 @@ class EffOCR:
         else:
             raise ValueError('config_yaml must be a path to a yaml file or a dictionary')
         
-        # TODO protocol for updating dictionary at arbitrary depth
+        config = dictmerge(DEFAULT_CONFIG, config)
+        
         if kwargs:
             for k, v in kwargs.items():
-                config['Global'][k] = v
+                config = dictlistmerge(config, k.split('__'), v)
         
         return config
     

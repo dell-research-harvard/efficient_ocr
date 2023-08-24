@@ -77,6 +77,7 @@ class EffOCR:
         
 
     def _load_config(self, config_yaml, **kwargs):
+        
         if isinstance(config_yaml, str):
             with open(config_yaml, 'r') as f:
                 config = yaml.safe_load(f)

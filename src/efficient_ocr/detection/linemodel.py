@@ -47,7 +47,7 @@ class LineModel:
         self.config = config
 
         for key, value in kwargs.items():
-            self.config['Global'][key] = value
+            self.config['Line'][key] = value
 
         self.initialize_model()
 

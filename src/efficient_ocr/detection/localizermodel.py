@@ -85,7 +85,7 @@ class LocalizerModel:
         '''Set up the config'''
         self.config = config
         for k, v in kwargs.items():
-            self.config['Global'][k] = v
+            self.config['Localizer'][k] = v
 
         self.initialize_model()
 

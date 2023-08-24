@@ -143,12 +143,14 @@ class RecognizerEngine:
 class Recognizer:
 
 
-    def __init__(self, config, type = 'char'):
+    def __init__(self, config, type = 'char', **kwargs):
 
         '''Set up the config'''
 
         self.config = config
         self.type = type
+        for key, value in kwargs.items():
+            self.config['Recognizer'][self.type][key] = value
 
         if self.config['Recognizer'][self.type]['huggingface_model'] is not None:
             self.config['Recognizer'][self.type]['index_path'] = \

@@ -168,7 +168,7 @@ cython_debug/
 *.onnx
 
 # models and data
-models/
+/models/
 data/
 
 # Some test fixtures

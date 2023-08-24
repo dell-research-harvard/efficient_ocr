@@ -36,6 +36,7 @@ from tqdm import tqdm
 from ..utils import initialize_onnx_model
 from ..utils import create_batches
 from ..utils import get_transform
+from ..utils import dictlistmerge
 
 from ..utils.recognition.synth_crops import render_all_synth_in_parallel
 from ..utils.recognition.datasets import create_dataset, create_render_dataset, create_hn_query_dataset
@@ -142,43 +143,29 @@ class RecognizerEngine:
 class Recognizer:
 
 
-    def __init__(self, config, type = 'char', **kwargs):
+    def __init__(self, config, type = 'char'):
 
         '''Set up the config'''
-
-        # TODO new protocol for adding in kwargs to config
-        for k, v in kwargs.items():
-            self.config['Global'][k] = v
-        """
-        for k, v in kwargs.items():
-            subdict = config
-            keys = k.split("_")
-            num_keys = len(keys)
-            for idx, key in enumerate(keys):
-                if key in subdict:
-                    subdict = subdict[key]
-                    if idx == num_keys - 2:
-                        subdict.update({key: v})
-                else:
-                    subdict.update({key: None})
-                    if idx == num_keys - 2:
-                        subdict.update({key: v})
-        """
 
         self.config = config
         self.type = type
 
         if self.config['Recognizer'][self.type]['huggingface_model'] is not None:
-            self.config['Recognizer'][self.type]['index_path'] = hf_hub_download('/'.join(self.config['Recognizer'][self.type]['huggingface_model'].split('/')[:-1]), 
-                                                                                 self.config['Recognizer'][self.type]['huggingface_model'].split('/')[-1] + '/{}_index.index'.format(self.type))
-            self.config['Recognizer'][self.type]['candidates_path'] = hf_hub_download('/'.join(self.config['Recognizer'][self.type]['huggingface_model'].split('/')[:-1]), 
-                                                                                      self.config['Recognizer'][self.type]['huggingface_model'].split('/')[-1] + '/{}_ref.txt'.format(self.type))
+            self.config['Recognizer'][self.type]['index_path'] = \
+                hf_hub_download('/'.join(self.config['Recognizer'][self.type]['huggingface_model'].split('/')[:-1]),
+                                self.config['Recognizer'][self.type]['huggingface_model'].split('/')[-1] + '/{}_index.index'.format(self.type))
+            self.config['Recognizer'][self.type]['candidates_path'] = \
+                hf_hub_download('/'.join(self.config['Recognizer'][self.type]['huggingface_model'].split('/')[:-1]),
+                self.config['Recognizer'][self.type]['huggingface_model'].split('/')[-1] + '/{}_ref.txt'.format(self.type))
             if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
-                self.config['Recognizer'][self.type]['encoder_path'] = hf_hub_download('/'.join(self.config['Recognizer'][self.type]['huggingface_model'].split('/')[:-1]), self.config['Recognizer'][self.type]['huggingface_model'].split('/')[-1] + '/enc_best.pth')
+                self.config['Recognizer'][self.type]['encoder_path'] = \
+                    hf_hub_download('/'.join(self.config['Recognizer'][self.type]['huggingface_model'].split('/')[:-1]), 
+                    self.config['Recognizer'][self.type]['huggingface_model'].split('/')[-1] + '/enc_best.pth')
             elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
-                self.config['Recognizer'][self.type]['encoder_path'] = hf_hub_download('/'.join(self.config['Recognizer'][self.type]['huggingface_model'].split('/')[:-1]), self.config['Recognizer'][self.type]['huggingface_model'].split('/')[-1] + '/enc.onnx')
+                self.config['Recognizer'][self.type]['encoder_path'] = \
+                    hf_hub_download('/'.join(self.config['Recognizer'][self.type]['huggingface_model'].split('/')[:-1]), 
+                    self.config['Recognizer'][self.type]['huggingface_model'].split('/')[-1] + '/enc.onnx')
             self.initialize_model()
-
 
         if self.config['Recognizer'][self.type]['pretrained_model_dir'] is None:
             self.config['Recognizer'][self.type]['encoder_path'] = None
@@ -244,8 +231,9 @@ class Recognizer:
 
     def train(self, data_json, data_dir, **kwargs):
 
-        for key, value in kwargs.items():
-            self.config['Global'][key] = value
+        if kwargs:
+            for k, v in kwargs.items():
+                self.config['Recognizer'][self.type][k] = v
 
         if not self.config['Recognizer'][self.type]['model_backend'] == 'timm':
             raise NotImplementedError('Training is only supported for timm models')

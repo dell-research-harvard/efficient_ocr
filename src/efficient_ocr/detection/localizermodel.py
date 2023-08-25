@@ -12,7 +12,7 @@ from collections import defaultdict
 import threading
 import torch
 import queue
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, snapshot_download
 import multiprocessing
 # from mmdet.apis import init_detector, inference_detector
 
@@ -77,9 +77,10 @@ class LocalizerModel:
         '''Set up the config'''
         self.config = config
         if self.config['Localizer']['huggingface_model'] is not None:
-            hf_hub_download(
-                repo_id=all_but_last_in_path(self.config['Localizer']['huggingface_model']), 
-                filename=last_in_path(self.config['Localizer']['huggingface_model']),
+            backend_ext = ".onnx" if self.config['Localizer']['model_backend'] == "onnx" else ".pt"
+            snapshot_download(
+                repo_id=self.config['Localizer']['huggingface_model'], 
+                allow_patterns="*local*"+backend_ext,
                 local_dir=self.config['Localizer']['model_dir'],
                 local_dir_use_symlinks=False)
         self.initialize_model()
@@ -105,7 +106,7 @@ class LocalizerModel:
             self.model.max_det = self.config['Localizer']['max_det']  # maximum number of detections per image
         elif self.config['Localizer']['model_backend'] == 'onnx' and not dir_is_empty(self.config['Localizer']['model_dir']):
             self.model, self.input_name, self.input_shape = \
-                initialize_onnx_model(get_path(self.config['Localizer']['model_dir'], ext="onnx"), self.config)
+                initialize_onnx_model(get_path(self.config['Localizer']['model_dir'], ext="onnx"), self.config["Localizer"])
         elif self.config['Localizer']['model_backend'] == 'mmdetection':
             if self.config['Localizer']['mmdet_config'] is None:
                 raise ValueError('Must specify a mmdetection config file for mmdetection models!')

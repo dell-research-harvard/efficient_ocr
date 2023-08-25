@@ -24,10 +24,11 @@ class EffOCR:
 
 
     def __init__(
-            self, config_yaml, 
+            self, config = dict(), 
             data_json = None, data_dir = None, 
             line_detector = None, localizer = None, 
             word_recognizer = None, char_recognizer = None,
+            hf_repo_id = None,
             **kwargs
         ):
 
@@ -47,7 +48,13 @@ class EffOCR:
         else:
             self.data_dir = os.getcwd()
             
-        self.config = self._load_config(config_yaml)
+        self.config = self._load_config(config, **kwargs)
+
+        if hf_repo_id is not None:
+            self.config['Line']['huggingface_model'] = hf_repo_id
+            self.config['Localizer']['huggingface_model'] = hf_repo_id
+            self.config['Recognizer']['word']['huggingface_model'] = hf_repo_id
+            self.config['Recognizer']['char']['huggingface_model'] = hf_repo_id
 
         if not line_detector is None:
             if os.path.isdir(line_detector):
@@ -88,15 +95,15 @@ class EffOCR:
             self.localizer_model = self._initialize_localizer()
         
 
-    def _load_config(self, config_yaml, **kwargs):
+    def _load_config(self, config, **kwargs):
         
-        if isinstance(config_yaml, str):
-            with open(config_yaml, 'r') as f:
+        if isinstance(config, str):
+            with open(config, 'r') as f:
                 config = yaml.safe_load(f)
-        elif isinstance(config_yaml, dict):
-            config = config_yaml
+        elif isinstance(config, dict):
+            pass
         else:
-            raise ValueError('config_yaml must be a path to a yaml file or a dictionary')
+            raise ValueError('config must be a path to a yaml file or a dictionary')
         
         config = dictmerge(DEFAULT_CONFIG, config)
         if kwargs:

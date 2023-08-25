@@ -2,8 +2,8 @@ from glob import glob
 import os
 
 
-# h/t: https://stackoverflow.com/questions/7204805/how-to-merge-dictionaries-of-dictionaries
 def dictmerge(a: dict, b: dict, path=[]):
+    """h/t: https://stackoverflow.com/questions/7204805/how-to-merge-dictionaries-of-dictionaries"""
     for key in b:
         if key in a:
             if isinstance(a[key], dict) and isinstance(b[key], dict):
@@ -13,18 +13,6 @@ def dictmerge(a: dict, b: dict, path=[]):
         else:
             a[key] = b[key]
     return a
-
-
-def dictlistmerge(d, l, v):
-    top = l.pop(0)
-    if top in d:
-        if isinstance(d[top], dict):
-            dictlistmerge(d[top], l, v)
-        else:
-            d[top] = v
-    else:
-        raise KeyError(f"Key [{top}] not in dictionary {d}")
-    return d
 
 
 def get_path(d, contains="", ends_in="", ext="", priority="newest"):
@@ -39,6 +27,8 @@ def get_path(d, contains="", ends_in="", ext="", priority="newest"):
 
     if priority == "newest":
         path = max(paths, key=os.path.getctime)
+    elif priority == "oldest":
+        path = min(paths, key=os.path.getctime)
     else:
         raise NotImplementedError
     

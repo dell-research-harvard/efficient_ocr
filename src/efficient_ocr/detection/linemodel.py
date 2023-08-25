@@ -12,7 +12,7 @@ import cv2
 from math import floor, ceil
 import yolov5
 from yolov5 import train
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, snapshot_download
 from collections import defaultdict
 
 from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, get_onnx_input_name, initialize_onnx_model
@@ -35,9 +35,10 @@ class LineModel:
 
         self.config = config
         if self.config['Line']['huggingface_model'] is not None:
-            hf_hub_download(
-                repo_id=all_but_last_in_path(self.config['Line']['huggingface_model']), 
-                filename=last_in_path(self.config['Line']['huggingface_model']),
+            backend_ext = ".onnx" if self.config['Line']['model_backend'] == "onnx" else ".pt"
+            snapshot_download(
+                repo_id=self.config['Line']['huggingface_model'], 
+                allow_patterns="*line*"+backend_ext,
                 local_dir=self.config['Line']['model_dir'],
                 local_dir_use_symlinks=False)
         self.initialize_model()

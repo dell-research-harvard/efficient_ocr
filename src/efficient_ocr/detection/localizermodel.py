@@ -32,6 +32,9 @@ def iteration(model, input):
     output = model(input)
     return output
 
+def onnx_iteration(model, input, input_name):
+    output = model.run(None, {input_name: input})
+    return output
 
 def mmdet_iteration(model, input):
     output = inference_detector(model, input)
@@ -52,18 +55,22 @@ class LocalizerEngineExecutorThread(threading.Thread):
         input_queue: queue.Queue,
         output_queue: queue.Queue,
         backend: str = 'yolov5',
+        input_name: str = None
     ):
         super(LocalizerEngineExecutorThread, self).__init__()
         self._model = model
         self._input_queue = input_queue
         self._output_queue = output_queue
         self.backend = backend
+        self.input_name = input_name
 
     def run(self):
         while not self._input_queue.empty():
             bbox_idx, line_idx, img = self._input_queue.get()
-            if self.backend != 'mmdetection':
+            if self.backend != 'mmdetection' and self.backend != 'onnx':
                 output = iteration(self._model, img)
+            elif self.backend == 'onnx':
+                output = onnx_iteration(self._model, img, self.input_name)
             else:
                 output = mmdet_iteration(self._model, img)
             self._output_queue.put((bbox_idx, line_idx, output))
@@ -93,7 +100,7 @@ class LocalizerModel:
         """
 
         os.makedirs(self.config['Localizer']['model_dir'], exist_ok=True)
-
+        self.input_name = None
         if self.config['Localizer']['model_backend'] == 'yolov5':
             if dir_is_empty(self.config['Localizer']['model_dir']):
                 self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
@@ -127,6 +134,7 @@ class LocalizerModel:
         else:
             raise ValueError('Invalid model backend specified and/or model directory empty')
         
+        
 
     def __call__(self, line_results):
         return self.run(line_results)
@@ -156,7 +164,7 @@ class LocalizerModel:
             self.config['Localizer']['num_cores'] = multiprocessing.cpu_count()
         
         for _ in range(self.config['Localizer']['num_cores']):
-            threads.append(LocalizerEngineExecutorThread(self.model, input_queue, output_queue))
+            threads.append(LocalizerEngineExecutorThread(self.model, input_queue, output_queue, input_name = self.input_name))
         
         for thread in threads:
             thread.start()

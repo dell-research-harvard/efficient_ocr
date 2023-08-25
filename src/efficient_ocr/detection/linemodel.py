@@ -18,9 +18,10 @@ from collections import defaultdict
 from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, get_onnx_input_name, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
 from ..utils import create_yolo_training_data, create_yolo_yaml
+from ..utils import all_but_last_in_path, last_in_path, get_path, dictmerge, dir_is_empty
 
 
-TRAINING_REQUIRED_ARGS = ['epochs', 'batch_size', 'line_training_name', 'device']
+# TRAINING_REQUIRED_ARGS = ['epochs', 'batch_size', 'line_training_name', 'device']
 
 
 class LineModel:
@@ -30,25 +31,15 @@ class LineModel:
     recombining especailly tall layout regions
     """
 
-    def __init__(self, config, **kwargs):
-        """Instantiates the object, including setting up the wrapped ONNX InferenceSession
+    def __init__(self, config):
 
-        Args:
-            model_path (str): Path to ONNX model that will be used
-            iou_thresh (float, optional): IOU filter for line detection NMS. Defaults to 0.15.
-            conf_thresh (float, optional): Confidence filter for line detection NMS. Defaults to 0.20.
-            num_cores (_type_, optional): Number of cores to use during inference. Defaults to None, meaning no intra op thread limit.
-            providers (_type_, optional): Any particular ONNX providers to use. Defaults to None, meaning results of ort.get_available_providers() will be used.
-            input_shape (tuple, optional): Shape of input images. Defaults to (640, 640).
-            model_backend (str, optional): Original model backend being used. Defaults to 'yolo'. Options are mmdetection, detectron2, yolo, yolov8.
-        """
-
-        '''Set up the config'''
         self.config = config
-
-        for key, value in kwargs.items():
-            self.config['Line'][key] = value
-
+        if self.config['Line']['huggingface_model'] is not None:
+            hf_hub_download(
+                repo_id=all_but_last_in_path(self.config['Line']['huggingface_model']), 
+                filename=last_in_path(self.config['Line']['huggingface_model']),
+                local_dir=self.config['Line']['model_dir'],
+                local_dir_use_symlinks=False)
         self.initialize_model()
 
 
@@ -70,24 +61,28 @@ class LineModel:
         Returns:
             _type_: _description_
         """
-        if self.config['Line']['huggingface_model'] is not None:
-            self.config['Line']['model_path'] = hf_hub_download('/'.join(self.config['Line']['huggingface_model'].split('/')[:-1]), self.config['Line']['huggingface_model'].split('/')[-1])
+
+        os.makedirs(self.config['Line']['model_dir'], exist_ok=True)
 
         if self.config['Line']['model_backend'] == 'yolov5':
-            self.model = yolov5.load(self.config['Line']['model_path'], device='cpu')
+            if dir_is_empty(self.config['Line']['model_dir']):
+                self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+            else:
+                self.model = yolov5.load(get_path(self.config['Line']['model_dir'], ext="pt"), device='cpu')
             self.model.conf = self.config['Line']['conf_thresh']  # NMS confidence threshold
             self.model.iou = self.config['Line']['iou_thresh']  # NMS IoU threshold
             self.model.agnostic = False  # NMS class-agnostic
             self.model.multi_label = False  # NMS multiple labels per box
             self.model.max_det = self.config['Line']['max_det']  # maximum number of detections per image
 
-        elif self.config['Line']['model_backend'] == 'onnx':
-            self.model, self._input_name, self._input_shape = initialize_onnx_model(self.config['Line']['model_path'], self.config['Line'])
+        elif self.config['Line']['model_backend'] == 'onnx' and not dir_is_empty(self.config['Line']['model_dir']):
+            self.model, self._input_name, self._input_shape = \
+                initialize_onnx_model(get_path(self.config['Line']['model_dir'], ext="onnx"), self.config['Line'])
 
         elif self.config['Line']['model_backend'] == 'mmdetection':
             raise NotImplementedError('mmdetection not yet implemented!')
         else:
-            raise ValueError('Invalid model backend specified! Must be one of yolo, onnx, or mmdetection')
+            raise ValueError('Invalid model backend specified and/or model directory empty')
     
     def run(self, imgs):
 
@@ -251,26 +246,33 @@ class LineModel:
             return crops
 
     # TODO: Train
-    def train(self, training_data, **kwargs):
+    def train(self, data_json, data_dir, **kwargs):
         if not self.config['Line']['model_backend'] == 'yolov5':
             raise NotImplementedError('Training is only implemented for yolo backend')
         
-        for key, val in kwargs.items():
-            self.config[key] = val
+        if kwargs:
+            config = dictmerge(config, kwargs)
 
+        """
         for key in TRAINING_REQUIRED_ARGS:
             if key not in self.config.keys():
                 raise ValueError(f'Missing required argument {key} for training!')
+        """
             
         # Create yolo training data from coco
-        data_path = create_yolo_training_data(training_data, 'line')
+        data_path = create_yolo_training_data(data_json, data_dir, 'line', self.config["Line"]["model_dir"])
 
         # Create yaml with training data
         yaml_loc = create_yolo_yaml(data_path, 'line')
 
-        train.run(imgsz=self.config['Line']['input_shape'][0], data=os.path.join(os.getcwd(), yaml_loc), weights=os.path.join(os.getcwd(), self.config['Line']['model_path']), epochs=self.config['epochs'], 
-                     batch_size=self.config['Line']['batch_size'], device=self.config['Line']['device'], exist_ok=True, name = self.config['Line']['training_name'])
+        train.run(
+            imgsz=self.config['Line']['input_shape'][0], 
+            data=yaml_loc,
+            weights=get_path(self.config['Line']['model_dir'], ext="pt"), 
+            epochs=self.config['epochs'], 
+            batch_size=self.config['Line']['batch_size'], 
+            device=self.config['Line']['device'], 
+            name = self.config['Line']['model_dir'],
+            exist_ok=True)
         
-
-        self.config['Line']['model_path'] = os.path.join('./runs/train/', self.config['Line']['training_name'], 'weights', 'best.pt')
         self.initialize_model()

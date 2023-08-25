@@ -6,7 +6,7 @@ Global:
 
 Recognizer:
   word:
-    model_output_dir: ./word_model
+    model_dir: ./word_model
     font_dir_path:
     render_dict:
     ready_to_go_data_dir_path:
@@ -53,7 +53,7 @@ Recognizer:
     huggingface_model:
 
   char:
-    model_output_dir: ./char_model
+    model_dir: ./char_model
     font_dir_path:
     render_dict:
     ready_to_go_data_dir_path:

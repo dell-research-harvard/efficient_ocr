@@ -20,18 +20,31 @@ import multiprocessing
 from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, en_preprocess, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
 from ..utils import create_yolo_training_data, create_yolo_yaml
+from ..utils import all_but_last_in_path, last_in_path, get_path, dictmerge, dir_is_empty
 
-TRAINING_REQUIRED_ARGS = ['epochs', 'batch_size', 'localizer_training_name', 'device']
+
+PARA_WEIGHT_L = 3
+PARA_WEIGHT_R = 1
+PARA_THRESH = 5
+
 
 def iteration(model, input):
     output = model(input)
     return output
 
+
 def mmdet_iteration(model, input):
     output = inference_detector(model, input)
     return output
 
-''' Threaded Localizer Inference'''
+
+def blank_localizer_response():
+    return {'words': [],
+            'chars': [],
+            'overlaps': [],
+            'para_end': False }
+
+
 class LocalizerEngineExecutorThread(threading.Thread):
     def __init__(
         self,
@@ -56,37 +69,19 @@ class LocalizerEngineExecutorThread(threading.Thread):
             self._output_queue.put((bbox_idx, line_idx, output))
 
 
-
-def blank_localizer_response():
-    return {'words': [],
-            'chars': [],
-            'overlaps': [],
-            'para_end': False }
-
-PARA_WEIGHT_L = 3
-PARA_WEIGHT_R = 1
-PARA_THRESH = 5
-
 class LocalizerModel:
 
-    def __init__(self, config, **kwargs):
-        """Instantiates the object, including setting up the wrapped ONNX InferenceSession
-
-        Args:
-            model_path (str): Path to ONNX model that will be used
-            iou_thresh (float, optional): IOU filter for line detection NMS. Defaults to 0.15.
-            conf_thresh (float, optional): Confidence filter for line detection NMS. Defaults to 0.20.
-            num_cores (_type_, optional): Number of cores to use during inference. Defaults to None, meaning no intra op thread limit.
-            providers (_type_, optional): Any particular ONNX providers to use. Defaults to None, meaning results of ort.get_available_providers() will be used.
-            input_shape (tuple, optional): Shape of input images. Defaults to (640, 640).
-            model_backend (str, optional): Original model backend being used. Defaults to 'yolo'. Options are mmdetection, detectron2, yolo, yolov8.
-        """
+    def __init__(self, config):
+        """Instantiates the object, including setting up the wrapped ONNX InferenceSession"""
 
         '''Set up the config'''
         self.config = config
-        for k, v in kwargs.items():
-            self.config['Localizer'][k] = v
-
+        if self.config['Localizer']['huggingface_model'] is not None:
+            hf_hub_download(
+                repo_id=all_but_last_in_path(self.config['Localizer']['huggingface_model']), 
+                filename=last_in_path(self.config['Localizer']['huggingface_model']),
+                local_dir=self.config['Localizer']['model_dir'],
+                local_dir_use_symlinks=False)
         self.initialize_model()
 
     def initialize_model(self):
@@ -95,20 +90,22 @@ class LocalizerModel:
         Returns:
             _type_: _description_
         """
-        if self.config['Localizer']['huggingface_model'] is not None:
-            self.config['Localizer']['model_path'] = hf_hub_download('/'.join(self.config['Localizer']['huggingface_model'].split('/')[:-1]), self.config['Localizer']['huggingface_model'].split('/')[-1])
+
+        os.makedirs(self.config['Localizer']['model_dir'], exist_ok=True)
 
         if self.config['Localizer']['model_backend'] == 'yolov5':
-            self.model = yolov5.load(self.config['Localizer']['model_path'], device='cpu')
+            if dir_is_empty(self.config['Localizer']['model_dir']):
+                self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+            else:
+                self.model = yolov5.load(get_path(self.config['Localizer']['model_dir'], ext="pt"), device='cpu')
             self.model.conf = self.config['Localizer']['conf_thresh']  # NMS confidence threshold
             self.model.iou = self.config['Localizer']['iou_thresh']  # NMS IoU threshold
             self.model.agnostic = False  # NMS class-agnostic
             self.model.multi_label = False  # NMS multiple labels per box
             self.model.max_det = self.config['Localizer']['max_det']  # maximum number of detections per image
-
-        elif self.config['Localizer']['model_backend'] == 'onnx':
-            self.model, self.input_name, self.input_shape = initialize_onnx_model(self.config['Localizer']['model_path'], self.config)
-
+        elif self.config['Localizer']['model_backend'] == 'onnx' and not dir_is_empty(self.config['Localizer']['model_dir']):
+            self.model, self.input_name, self.input_shape = \
+                initialize_onnx_model(get_path(self.config['Localizer']['model_dir'], ext="onnx"), self.config)
         elif self.config['Localizer']['model_backend'] == 'mmdetection':
             if self.config['Localizer']['mmdet_config'] is None:
                 raise ValueError('Must specify a mmdetection config file for mmdetection models!')
@@ -121,10 +118,13 @@ class LocalizerModel:
                     "model.roi_head.bbox_head.2.num_classes": 2,
                     "model.roi_head.mask_head.num_classes": 2,
                 }
-            self.localizer = init_detector(self.config['Localizer']['mmdet_config'], self.config['Localizer']['model_path'], device='cpu', cfg_options=loc_mmdet_config)
-
+            self.localizer = init_detector(
+                self.config['Localizer']['mmdet_config'], 
+                get_path(self.config['Localizer']['model_dir'], ext="pth"), 
+                device='cpu', 
+                cfg_options=loc_mmdet_config)
         else:
-            raise ValueError('Invalid model backend specified! Must be one of yolo, onnx, or mmdetection')
+            raise ValueError('Invalid model backend specified and/or model directory empty')
         
 
     def __call__(self, line_results):
@@ -139,7 +139,6 @@ class LocalizerModel:
             # Set up localizer results as a mapping from bounding box index to a dictionary of line indices to a list of localizations
             localizer_results[bbox_idx] = {i: blank_localizer_response() for i in range(len(line_results[bbox_idx]))}
         
-
         # Set up the input queue
         input_queue = queue.Queue()
         for bbox_idx in line_results.keys():
@@ -242,27 +241,33 @@ class LocalizerModel:
 
         return localizer_results
     
-    def train(self, training_data, **kwargs):
+    def train(self, data_json, data_dir, **kwargs):
         if self.config['Localizer']['model_backend'] != 'yolov5':
             raise NotImplementedError('Only YOLO model backend is currently supported for training!')
         
-        for key, val in kwargs.items():
-            self.config['Localizer'][key] = val
+        if kwargs:
+            config = dictmerge(config, kwargs)
 
+        """
         for key in TRAINING_REQUIRED_ARGS:
             if key not in self.config.keys():
                 raise ValueError(f'Missing required argument {key} for training!')
+        """
 
         # Create yolo training data from coco
-        data_locs = create_yolo_training_data(training_data, 'localizer')
+        data_locs = create_yolo_training_data(data_json, data_dir, 'localizer', self.config["Localizer"]["model_dir"])
 
         # Create yaml with training data
         yaml_loc = create_yolo_yaml(data_locs, 'localizer')
 
-
-        train.run(imgsz=self.config['Localizer']['input_shape'][0], data=yaml_loc, weights=self.config['Localizer']['model_path'], epochs=self.config['Localizer']['epochs'], 
-                     batch_size=self.config['Localizer']['batch_size'], device=self.config['Localizer']['device'], exist_ok=True, name = self.config['Localizer']['training_name'])
+        train.run(
+            imgsz=self.config['Localizer']['input_shape'][0], 
+            data=yaml_loc, 
+            weights=get_path(self.config['Localizer']['model_dir'], ext="pt"), 
+            epochs=self.config['Localizer']['epochs'], 
+            batch_size=self.config['Localizer']['batch_size'], 
+            device=self.config['Localizer']['device'],  
+            name = self.config['Localizer']['model_dir'],
+            exist_ok=True)
         
-
-        self.config['Localizer']['model_path'] = os.path.join(self.config['Localizer']['training_name'], 'weights', 'best.pt')
         self.initialize_model()

@@ -10,7 +10,7 @@ import cv2
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
 from ..recognition import Recognizer, infer_last_chars, infer_words, infer_chars
 from ..detection import LineModel, LocalizerModel # , word_model, char_model
-from ..utils import make_coco_from_effocr_result, visualize_effocr_result, dictmerge, dictlistmerge, DEFAULT_CONFIG
+from ..utils import make_coco_from_effocr_result, visualize_effocr_result, dictmerge, DEFAULT_CONFIG
 
 
 class EffOCRResult:
@@ -49,14 +49,26 @@ class EffOCR:
             
         self.config = self._load_config(config_yaml)
 
-        if not line_detector is None and not os.path.isdir(line_detector):
-            self.config['Line']['huggingface_model'] = line_detector
-        if not localizer is None and not os.path.isdir(localizer):
-            self.config['Localizer']['huggingface_model'] = localizer
-        if not word_recognizer is None and not os.path.isdir(word_recognizer):
-            self.config['Recognizer']['word']['huggingface_model'] = word_recognizer
-        if not char_recognizer is None and not os.path.isdir(char_recognizer):
-            self.config['Recognizer']['char']['huggingface_model'] = char_recognizer
+        if not line_detector is None:
+            if os.path.isdir(line_detector):
+                self.config['Line']['model_dir'] = line_detector
+            else:
+                self.config['Line']['huggingface_model'] = line_detector
+        if not localizer is None:
+            if os.path.isdir(localizer):
+                self.config['Localizer']['model_dir'] = localizer
+            else:
+                self.config['Localizer']['huggingface_model'] = localizer
+        if not word_recognizer is None:
+            if os.path.isdir(word_recognizer):
+                self.config['Recognizer']['word']['model_dir'] = word_recognizer
+            else:
+                self.config['Recognizer']['word']['huggingface_model'] = word_recognizer
+        if not char_recognizer is None:
+            if os.path.isdir(char_recognizer):
+                self.config['Recognizer']['char']['model_dir'] = char_recognizer
+            else:
+                self.config['Recognizer']['char']['huggingface_model'] = char_recognizer
         
         if self.config['Global']['char_only'] and self.config['Global']['recognition_only']:
             self.char_model = self._initialize_char_recognizer()
@@ -87,10 +99,8 @@ class EffOCR:
             raise ValueError('config_yaml must be a path to a yaml file or a dictionary')
         
         config = dictmerge(DEFAULT_CONFIG, config)
-        
         if kwargs:
-            for k, v in kwargs.items():
-                config = dictlistmerge(config, k.split('__'), v)
+            config = dictmerge(config, kwargs)
         
         return config
     
@@ -132,11 +142,11 @@ class EffOCR:
 
 
     def _train_line(self, **kwargs):
-        self.line_model.train(self.data_json, **kwargs)
+        self.line_model.train(self.data_json, self.data_dir, **kwargs)
 
 
     def _train_localizer(self, **kwargs):
-        self.localizer_model.train(self.data_json, **kwargs)
+        self.localizer_model.train(self.data_json, self.data_dir, **kwargs)
 
 
     def _train_word_recognizer(self, **kwargs):

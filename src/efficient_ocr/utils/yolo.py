@@ -5,10 +5,15 @@ import cv2
 TARGET_LABEL_MAPPING = {0: '0', 1: '1', 2: '0'}
 MATCHING_COCO_CATEGORIES = {'line': [2], 'localizer': [0, 1]}
 
-def create_yolo_training_data(coco, target, img_dir = './data/images', output_dir = r'./data/yolo', split = [0.8, 0.2]):
+def create_yolo_training_data(
+        coco, 
+        img_dir, 
+        target, 
+        output_dir, 
+        split = [0.8, 0.2]):
+    
     if target not in ['line', 'localizer']:
         raise NotImplementedError('Only line and localizer targets are supported for coco-yolo conversion')
-    
     
     if type(coco) == str:
         with open(coco, 'r') as infile:
@@ -66,6 +71,7 @@ def create_yolo_training_data(coco, target, img_dir = './data/images', output_di
 
 
 def create_yolo_yaml(path, target):
+
     names = ['line'] if target == 'line' else ['char', 'word']
 
     with open(os.path.join(path, 'data.yaml'), 'w') as outfile:

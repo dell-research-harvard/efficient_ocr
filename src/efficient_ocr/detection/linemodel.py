@@ -218,6 +218,7 @@ class LineModel:
             im = im.astype(np.float32) / 255.0  # 0 - 255 to 0.0 - 1.0
             if im.ndim == 3:
                 im = np.expand_dims(im, 0)
+            return im
         
         elif self.config['Line']['model_backend'] == 'yolov5':
             im = img

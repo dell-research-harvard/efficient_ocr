@@ -32,9 +32,11 @@ def iteration(model, input):
     output = model(input)
     return output
 
+
 def onnx_iteration(model, input, input_name):
     output = model.run(None, {input_name: input})
     return output
+
 
 def mmdet_iteration(model, input):
     output = inference_detector(model, input)
@@ -70,10 +72,19 @@ class LocalizerEngineExecutorThread(threading.Thread):
             if self.backend != 'mmdetection' and self.backend != 'onnx':
                 output = iteration(self._model, img)
             elif self.backend == 'onnx':
-                output = onnx_iteration(self._model, img, self.input_name)
+                output = onnx_iteration(self._model, self.onnx_format_img(img), self.input_name)
             else:
                 output = mmdet_iteration(self._model, img)
             self._output_queue.put((bbox_idx, line_idx, output))
+
+    def onnx_format_img(self, img):
+        im = letterbox(img, stride=32, auto=False)[0]  # padded resize
+        im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+        im = np.ascontiguousarray(im)  # contiguous
+        im = im.astype(np.float32) / 255.0  # 0 - 255 to 0.0 - 1.0
+        if im.ndim == 3:
+            im = np.expand_dims(im, 0)
+        return im
 
 
 class LocalizerModel:
@@ -164,7 +175,13 @@ class LocalizerModel:
             self.config['Localizer']['num_cores'] = multiprocessing.cpu_count()
         
         for _ in range(self.config['Localizer']['num_cores']):
-            threads.append(LocalizerEngineExecutorThread(self.model, input_queue, output_queue, input_name = self.input_name))
+            threads.append(
+                LocalizerEngineExecutorThread(
+                    self.model, input_queue, output_queue, 
+                    backend = self.config['Localizer']['model_backend'], 
+                    input_name = self.input_name
+                )
+            )
         
         for thread in threads:
             thread.start()
@@ -177,7 +194,16 @@ class LocalizerModel:
         while not output_queue.empty():
             bbox_idx, im_idx, preds = output_queue.get()
             im = line_results[bbox_idx][im_idx][0]
-            preds = preds.pred[0]
+            if self.config['Localizer']['model_backend'] == 'onnx':  
+                preds = [torch.from_numpy(pred) for pred in preds]
+                preds = [yolov5_non_max_suppression(
+                    pred, conf_thres = self.config['Localizer']['conf_thresh'], 
+                    iou_thres=self.config['Localizer']['iou_thresh'], 
+                    max_det=self.config['Localizer']['max_det'])[0] for pred in preds]
+                preds = preds[0]
+            else:
+                preds = preds.pred[0]
+            
             bboxes, confs, labels = preds[:, :4], preds[:, -2], preds[:, -1]
             
             if not self.config['Localizer']['vertical']:

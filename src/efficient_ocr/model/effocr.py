@@ -28,14 +28,16 @@ class EffOCR:
             data_json = None, data_dir = None, 
             line_detector = None, localizer = None, 
             word_recognizer = None, char_recognizer = None,
-            hf_repo_id = None,
+            hf_repo_id = None, onnx = False,
             **kwargs
         ):
 
-        self.training_funcs = {'line_detection': self._train_line,
-                                'word_and_character_detection': self._train_localizer,
-                                'word_recognition': self._train_word_recognizer,
-                                'char_recognition': self._train_char_recognizer}
+        self.training_funcs = {
+            'line_detection': self._train_line,
+            'word_and_character_detection': self._train_localizer,
+            'word_recognition': self._train_word_recognizer,
+            'char_recognition': self._train_char_recognizer
+        }
         
         if data_json is not None:
             with open(data_json, 'r') as f:
@@ -55,6 +57,12 @@ class EffOCR:
             self.config['Localizer']['huggingface_model'] = hf_repo_id
             self.config['Recognizer']['word']['huggingface_model'] = hf_repo_id
             self.config['Recognizer']['char']['huggingface_model'] = hf_repo_id
+
+        if onnx:
+            self.config['Line']['model_backend'] = "onnx"
+            self.config['Localizer']['model_backend'] = "onnx"
+            self.config['Recognizer']['word']['model_backend'] = "onnx"
+            self.config['Recognizer']['char']['model_backend'] = "onnx"
 
         if not line_detector is None:
             if os.path.isdir(line_detector):

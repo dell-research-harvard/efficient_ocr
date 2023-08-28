@@ -113,7 +113,7 @@ class LocalizerModel:
         os.makedirs(self.config['Localizer']['model_dir'], exist_ok=True)
         self.input_name = None
         if self.config['Localizer']['model_backend'] == 'yolov5':
-            if dir_is_empty(self.config['Localizer']['model_dir']):
+            if get_path(self.config['Localizer']['model_dir'], ext='pt') is None:
                 self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
             else:
                 self.model = yolov5.load(get_path(self.config['Localizer']['model_dir'], ext="pt"), device='cpu')
@@ -292,15 +292,17 @@ class LocalizerModel:
         """
 
         # Create yolo training data from coco
-        data_locs = create_yolo_training_data(data_json, data_dir, 'localizer', self.config["Localizer"]["model_dir"])
-
-        # Create yaml with training data
-        yaml_loc = create_yolo_yaml(data_locs, 'localizer')
+        yaml_loc = create_yolo_training_data(
+            data_json, data_dir, target='localizer', 
+            output_dir=self.config["Localizer"]["model_dir"], 
+            char_only=self.config["Global"]["char_only"])
+        
+        train_weights = get_path(self.config['Localizer']['model_dir'], ext="pt")
 
         train.run(
             imgsz=self.config['Localizer']['input_shape'][0], 
             data=yaml_loc, 
-            weights=get_path(self.config['Localizer']['model_dir'], ext="pt"), 
+            weights=train_weights if train_weights is not None else 'yolov5s.pt', 
             epochs=self.config['Localizer']['epochs'], 
             batch_size=self.config['Localizer']['batch_size'], 
             device=self.config['Localizer']['device'],  

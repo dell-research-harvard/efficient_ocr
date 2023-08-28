@@ -66,7 +66,7 @@ class LineModel:
         os.makedirs(self.config['Line']['model_dir'], exist_ok=True)
 
         if self.config['Line']['model_backend'] == 'yolov5':
-            if dir_is_empty(self.config['Line']['model_dir']):
+            if get_path(self.config['Line']['model_dir'], ext='pt') is None:
                 self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
             else:
                 self.model = yolov5.load(get_path(self.config['Line']['model_dir'], ext="pt"), device='cpu')
@@ -262,16 +262,18 @@ class LineModel:
         """
             
         # Create yolo training data from coco
-        data_path = create_yolo_training_data(data_json, data_dir, 'line', self.config["Line"]["model_dir"])
-
-        # Create yaml with training data
-        yaml_loc = create_yolo_yaml(data_path, 'line')
+        yaml_loc = create_yolo_training_data(
+            data_json, data_dir, target='line', 
+            output_dir=self.config["Line"]["model_dir"], 
+            char_only=self.config["Global"]["char_only"])
+        
+        train_weights = get_path(self.config['Line']['model_dir'], ext="pt")
 
         train.run(
             imgsz=self.config['Line']['input_shape'][0], 
             data=yaml_loc,
-            weights=get_path(self.config['Line']['model_dir'], ext="pt"), 
-            epochs=self.config['epochs'], 
+            weights=train_weights if train_weights is not None else 'yolov5s.pt', 
+            epochs=self.config['Line']['epochs'], 
             batch_size=self.config['Line']['batch_size'], 
             device=self.config['Line']['device'], 
             name = self.config['Line']['model_dir'],

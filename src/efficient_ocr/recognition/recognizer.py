@@ -13,7 +13,7 @@ import json
 import PIL
 import os
 from glob import glob
-import uuid
+import re
 
 import torch
 import torch.nn as nn
@@ -42,7 +42,7 @@ from ..utils.recognition.datasets import create_dataset, create_render_dataset, 
 from ..utils.recognition.transforms import create_paired_transform, INV_NORMALIZE
 from ..utils.recognition.custom_schedulers import CosineAnnealingDecWarmRestarts
 from ..utils.recognition.encoders import AutoEncoderFactory
-from ..utils import get_path, dictmerge
+from ..utils import get_path, dictmerge, dir_is_empty
 
 
 def str_to_ord_str(string):
@@ -50,7 +50,7 @@ def str_to_ord_str(string):
 
 
 def ord_str_to_word(ord_str):
-    return ''.join([chr(int(ord_char)) for ord_char in ord_str.split('_')])
+    return ''.join([chr(int(ord_char)) for ord_char in re.split('[_|]', ord_str)])
 
 
 def get_crop_embeddings(recognizer_engine, crops, num_streams=4):
@@ -161,25 +161,22 @@ class Recognizer:
 
         os.makedirs(self.config['Recognizer'][self.type]['model_dir'], exist_ok=True)
 
-        self.index = faiss.read_index(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index"))
-
-        with open(get_path(self.config['Recognizer'][self.type]['model_dir'], "txt"), 'r') as f:
-            self.candidates = f.read().splitlines()
-
-        if self.type == 'word':
-            self.candidates = [ord_str_to_word(candidate) for candidate in self.candidates]
-
-        if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
-            model = timm.create_model(self.config['Recognizer'][self.type]['timm_model_name'], num_classes=0, pretrained=True)
-            pretrained_dict = torch.load(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="pth"))
-            pretrained_dict = {k.replace("net.", ""): v for k, v in pretrained_dict.items() if k.startswith("net.")}
-            self.model = model.load_state_dict(pretrained_dict)
-            self.input_name = None
-
-        elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
-            self.model, self.input_name, _ = initialize_onnx_model(
-                get_path(self.config['Recognizer'][self.type]['model_dir'], ext="onnx"), 
-                self.config['Recognizer'][self.type])
+        if not get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index") is None:
+            self.index = faiss.read_index(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index"))
+            with open(get_path(self.config['Recognizer'][self.type]['model_dir'], "txt"), 'r') as f:
+                self.candidates = f.read().splitlines()
+            if self.type == 'word':
+                self.candidates = [ord_str_to_word(candidate) for candidate in self.candidates]
+            if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
+                model = timm.create_model(self.config['Recognizer'][self.type]['timm_model_name'], num_classes=0, pretrained=True)
+                pretrained_dict = torch.load(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="pth"))
+                pretrained_dict = {k.replace("net.", ""): v for k, v in pretrained_dict.items() if k.startswith("net.")}
+                self.model = model.load_state_dict(pretrained_dict)
+                self.input_name = None
+            elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
+                self.model, self.input_name, _ = initialize_onnx_model(
+                    get_path(self.config['Recognizer'][self.type]['model_dir'], ext="onnx"), 
+                    self.config['Recognizer'][self.type])
 
 
     def __call__(self, images):
@@ -213,6 +210,8 @@ class Recognizer:
 
         if not self.config['Recognizer'][self.type]['model_backend'] == 'timm':
             raise NotImplementedError('Training is only supported for timm models')
+        
+        os.makedirs(self.config['Recognizer'][self.type]["model_dir"], exist_ok=True)
 
         ## Create training data from input coco if not already created
         self._get_training_data(data_json, data_dir)
@@ -229,14 +228,10 @@ class Recognizer:
         Transcriptions are currently being passed along with file names
         """
 
-        os.makedirs(self.config['Recognizer'][self.type]["model_dir"], exist_ok=True)
+        self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"] = \
+            os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ready_to_go_training_data")
 
-        if self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"] is None:
-
-            # create training data folder
-
-            self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"] = \
-                os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ready_to_go_training_data")
+        if not os.path.exists(os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ready_to_go_training_data")):
 
             # extract important metadata
 
@@ -375,8 +370,8 @@ class Recognizer:
         with open(test_paired_image_json_path, "w") as f:
             json.dump(test_paired_image_paths, f)
 
-        unique_test = [y.split('/')[-2] for y in [x['file_name'] for x in test_paired_image_paths['images']]]
-        print(f"Distinct train chars appearing in test: {len(set(unique_train).intersection(set(unique_test)))}/{len(set(unique_test))}")
+        # unique_test = [y.split('/')[-2] for y in [x['file_name'] for x in test_paired_image_paths['images']]]
+        # print(f"Distinct train chars appearing in test: {len(set(unique_train).intersection(set(unique_test)))}/{len(set(unique_test))}")
 
         return train_paired_image_json_path, val_paired_image_json_path, test_paired_image_json_path
 
@@ -403,10 +398,10 @@ class Recognizer:
 
         # init encoder
 
-        if len(os.listdir(self.config['Recognizer'][self.type]['model_dir'])) == 0:
+        if get_path(self.config['Recognizer'][self.type]['model_dir'], contains="enc") is None:
             enc = encoder()
         else:
-            enc = encoder.load(self.config['Recognizer'][self.type]['encoder_path'])
+            enc = encoder.load(get_path(self.config['Recognizer'][self.type]['model_dir'], contains="enc"))
 
         # data parallelism
 

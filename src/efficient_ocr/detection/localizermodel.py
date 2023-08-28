@@ -192,7 +192,9 @@ class LocalizerModel:
         # Get the results from the output queue
         side_dists  = {bbox_idx: {'l_dists': [None] * len(line_results[bbox_idx]), 'r_dists': [None] * len(line_results[bbox_idx])} for bbox_idx in line_results.keys()}
         while not output_queue.empty():
+            print(output_queue.get())
             bbox_idx, im_idx, preds = output_queue.get()
+            
             im = line_results[bbox_idx][im_idx][0]
             if self.config['Localizer']['model_backend'] == 'onnx':  
                 preds = [torch.from_numpy(pred) for pred in preds]

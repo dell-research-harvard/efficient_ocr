@@ -6,6 +6,7 @@ import numpy as np
 import yaml
 from collections import defaultdict
 import os
+import torch
 import cv2
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
 from ..recognition import Recognizer, infer_last_chars, infer_words, infer_chars
@@ -31,6 +32,8 @@ class EffOCR:
             hf_repo_id = None, onnx = False,
             **kwargs
         ):
+
+        print(f'GPU is available?: {torch.cuda.is_available()}')
 
         self.training_funcs = {
             'line_detection': self._train_line,
@@ -100,8 +103,7 @@ class EffOCR:
             self.char_model = self._initialize_char_recognizer()
             if not self.config['Global']['skip_line_detection']:
                 self.line_model = self._initialize_line()
-            self.localizer_model = self._initialize_localizer()
-        
+            self.localizer_model = self._initialize_localizer()       
 
     def _load_config(self, config, **kwargs):
         

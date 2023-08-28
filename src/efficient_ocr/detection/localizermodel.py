@@ -6,7 +6,7 @@ Class for EffOCR Localization Model
 import os
 import json
 import yolov5
-from yolov5 import train
+from yolov5 import train as yolov5_train
 import numpy as np
 from collections import defaultdict
 import threading
@@ -14,6 +14,7 @@ import torch
 import queue
 from huggingface_hub import hf_hub_download, snapshot_download
 import multiprocessing
+import subprocess
 # from mmdet.apis import init_detector, inference_detector
 
 
@@ -114,7 +115,7 @@ class LocalizerModel:
         self.input_name = None
         if self.config['Localizer']['model_backend'] == 'yolov5':
             if get_path(self.config['Localizer']['model_dir'], ext='pt') is None:
-                self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+                self.model = yolov5.load('yolov5s.pt')
             else:
                 self.model = yolov5.load(get_path(self.config['Localizer']['model_dir'], ext="pt"), device='cpu')
             self.model.conf = self.config['Localizer']['conf_thresh']  # NMS confidence threshold
@@ -299,14 +300,25 @@ class LocalizerModel:
         
         train_weights = get_path(self.config['Localizer']['model_dir'], ext="pt")
 
-        train.run(
+        subprocess.run([
+            "yolov5", "train",
+            "--imgsz", str(self.config['Localizer']['input_shape'][0]),
+            "--data", yaml_loc,
+            "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
+            "--epochs", str(self.config['Localizer']['epochs']),
+            "--batch_size", str(self.config['Localizer']['batch_size']),
+            "--device", self.config['Localizer']['device'],
+            "--project", self.config['Localizer']['model_dir']])
+
+        """
+        yolov5_train.run(
             imgsz=self.config['Localizer']['input_shape'][0], 
             data=yaml_loc, 
             weights=train_weights if train_weights is not None else 'yolov5s.pt', 
             epochs=self.config['Localizer']['epochs'], 
             batch_size=self.config['Localizer']['batch_size'], 
             device=self.config['Localizer']['device'],  
-            name = self.config['Localizer']['model_dir'],
-            exist_ok=True)
-        
+            project = self.config['Localizer']['model_dir'])
+        """
+                        
         self.initialize_model()

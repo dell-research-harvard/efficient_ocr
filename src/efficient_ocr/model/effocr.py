@@ -8,6 +8,7 @@ from collections import defaultdict
 import os
 import torch
 import cv2
+
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
 from ..recognition import Recognizer, infer_last_chars, infer_words, infer_chars
 from ..detection import LineModel, LocalizerModel # , word_model, char_model
@@ -152,6 +153,7 @@ class EffOCR:
             raise ValueError('target must be a single training procedure or a list of training procedures')
 
         for t in target:
+            print(f"\n\n*** TRAINING: {t} ***\n\n")
             if t not in self.training_funcs.keys():
                 raise ValueError('target must be one of {}'.format(self.training_funcs.keys()))
             else:

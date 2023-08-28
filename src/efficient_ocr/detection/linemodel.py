@@ -11,9 +11,10 @@ import torchvision
 import cv2
 from math import floor, ceil
 import yolov5
-from yolov5 import train
+from yolov5 import train as yolov5_train
 from huggingface_hub import hf_hub_download, snapshot_download
 from collections import defaultdict
+import subprocess
 
 from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, get_onnx_input_name, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
@@ -67,7 +68,7 @@ class LineModel:
 
         if self.config['Line']['model_backend'] == 'yolov5':
             if get_path(self.config['Line']['model_dir'], ext='pt') is None:
-                self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+                self.model = yolov5.load('yolov5s.pt')
             else:
                 self.model = yolov5.load(get_path(self.config['Line']['model_dir'], ext="pt"), device='cpu')
             self.model.conf = self.config['Line']['conf_thresh']  # NMS confidence threshold
@@ -247,7 +248,7 @@ class LineModel:
             crops.append(image[y0:im_height, 0:im_width])
             return crops
 
-    # TODO: Train
+
     def train(self, data_json, data_dir, **kwargs):
         if not self.config['Line']['model_backend'] == 'yolov5':
             raise NotImplementedError('Training is only implemented for yolo backend')
@@ -269,14 +270,25 @@ class LineModel:
         
         train_weights = get_path(self.config['Line']['model_dir'], ext="pt")
 
-        train.run(
+        subprocess.run([
+            "yolov5", "train",
+            "--imgsz", str(self.config['Line']['input_shape'][0]),
+            "--data", yaml_loc,
+            "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
+            "--epochs", str(self.config['Line']['epochs']),
+            "--batch_size", str(self.config['Line']['batch_size']),
+            "--device", self.config['Line']['device'],
+            "--project", self.config['Line']['model_dir']])
+        
+        """
+        yolov5_train.run(
             imgsz=self.config['Line']['input_shape'][0], 
             data=yaml_loc,
             weights=train_weights if train_weights is not None else 'yolov5s.pt', 
             epochs=self.config['Line']['epochs'], 
             batch_size=self.config['Line']['batch_size'], 
             device=self.config['Line']['device'], 
-            name = self.config['Line']['model_dir'],
-            exist_ok=True)
-        
+            project = self.config['Line']['model_dir'])
+        """
+                        
         self.initialize_model()

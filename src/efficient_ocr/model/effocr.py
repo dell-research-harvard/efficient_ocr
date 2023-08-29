@@ -29,8 +29,7 @@ class EffOCR:
             self, config = dict(), 
             data_json = None, data_dir = None, 
             line_detector = None, localizer = None, 
-            word_recognizer = None, char_recognizer = None,
-            hf_repo_id = None, onnx = False,
+            word_recognizer = None, char_recognizer = None, onnx = False,
             **kwargs
         ):
 
@@ -56,12 +55,6 @@ class EffOCR:
             
         self.config = self._load_config(config, **kwargs)
 
-        if hf_repo_id is not None:
-            self.config['Line']['huggingface_model'] = hf_repo_id
-            self.config['Localizer']['huggingface_model'] = hf_repo_id
-            self.config['Recognizer']['word']['huggingface_model'] = hf_repo_id
-            self.config['Recognizer']['char']['huggingface_model'] = hf_repo_id
-
         if onnx:
             self.config['Line']['model_backend'] = "onnx"
             self.config['Localizer']['model_backend'] = "onnx"
@@ -78,22 +71,22 @@ class EffOCR:
             if os.path.isdir(line_detector):
                 self.config['Line']['model_dir'] = line_detector
             else:
-                self.config['Line']['huggingface_model'] = line_detector
+                self.config['Line']['hf_repo_id'] = line_detector
         if not localizer is None:
             if os.path.isdir(localizer):
                 self.config['Localizer']['model_dir'] = localizer
             else:
-                self.config['Localizer']['huggingface_model'] = localizer
+                self.config['Localizer']['hf_repo_id'] = localizer
         if not word_recognizer is None:
             if os.path.isdir(word_recognizer):
                 self.config['Recognizer']['word']['model_dir'] = word_recognizer
             else:
-                self.config['Recognizer']['word']['huggingface_model'] = word_recognizer
+                self.config['Recognizer']['word']['hf_repo_id'] = word_recognizer
         if not char_recognizer is None:
             if os.path.isdir(char_recognizer):
                 self.config['Recognizer']['char']['model_dir'] = char_recognizer
             else:
-                self.config['Recognizer']['char']['huggingface_model'] = char_recognizer
+                self.config['Recognizer']['char']['hf_repo_id'] = char_recognizer
         
         if self.config['Global']['char_only'] and self.config['Global']['recognition_only']:
             self.char_model = self._initialize_char_recognizer()

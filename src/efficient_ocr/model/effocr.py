@@ -68,6 +68,12 @@ class EffOCR:
             self.config['Recognizer']['word']['model_backend'] = "onnx"
             self.config['Recognizer']['char']['model_backend'] = "onnx"
 
+        if self.config['Line']['model_backend'] == "onnx" or \
+                self.config['Localizer']['model_backend'] == "onnx" or \
+                self.config['Recognizer']['word']['model_backend'] == "onnx" or \
+                self.config['Recognizer']['char']['model_backend'] == "onnx":
+            raise NotImplementedError("The ONNX backend is not currently supported, but will be shortly!")
+        
         if not line_detector is None:
             if os.path.isdir(line_detector):
                 self.config['Line']['model_dir'] = line_detector

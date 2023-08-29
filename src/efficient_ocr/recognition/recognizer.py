@@ -5,6 +5,7 @@ Essentially holds an encoder, an faiss reference index, and a list of candidate 
 '''
 import faiss
 import timm
+from timm.models.hub import push_to_hf_hub
 import torch
 import queue
 import numpy as np
@@ -29,7 +30,7 @@ from torch.optim import AdamW
 import wandb
 from collections import defaultdict
 import shutil
-from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub import hf_hub_download, snapshot_download, create_repo, login, upload_file
 
 from tqdm import tqdm
 
@@ -144,40 +145,72 @@ class Recognizer:
     def __init__(self, config, type = 'char'):
 
         self.config = config
-        self.type = type
-
-        if self.config['Recognizer'][self.type]['huggingface_model'] is not None:
-            snapshot_download(
-                repo_id=self.config['Recognizer'][self.type]['huggingface_model'], 
-                local_dir=self.config['Recognizer'][self.type]['model_dir'],
-                allow_patterns=f"*{self.type}*",
-                local_dir_use_symlinks=False)
-                        
+        self.type = type             
         self.transform = get_transform(type)
         self.initialize_model()
 
-
     def initialize_model(self):
 
-        os.makedirs(self.config['Recognizer'][self.type]['model_dir'], exist_ok=True)
-
         if not get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index") is None:
+
+            print("Loading (local) pretrained model!")
+
             self.index = faiss.read_index(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index"))
+
             with open(get_path(self.config['Recognizer'][self.type]['model_dir'], "txt"), 'r') as f:
                 self.candidates = f.read().splitlines()
+
             if self.type == 'word':
                 self.candidates = [ord_str_to_word(candidate) for candidate in self.candidates]
+
             if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
-                model = timm.create_model(self.config['Recognizer'][self.type]['timm_model_name'], num_classes=0, pretrained=True)
+                self.model = timm.create_model(self.config['Recognizer'][self.type]['timm_model_name'], num_classes=0, pretrained=True)
                 pretrained_dict = torch.load(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="pth"))
-                pretrained_dict = {k.replace("net.", ""): v for k, v in pretrained_dict.items() if k.startswith("net.")}
-                self.model = model.load_state_dict(pretrained_dict)
+                self.model.load_state_dict(pretrained_dict)
                 self.input_name = None
+
             elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
                 self.model, self.input_name, _ = initialize_onnx_model(
                     get_path(self.config['Recognizer'][self.type]['model_dir'], ext="onnx"), 
                     self.config['Recognizer'][self.type])
 
+        elif not self.config['Recognizer'][self.type]['hf_repo_id'] is None:
+
+            print("Loading (HF) pretrained model!")
+
+            for fn in ['ref.txt', 'ref.index']:
+                hf_hub_download(
+                    repo_id=self.config['Recognizer'][self.type]['hf_repo_id'],
+                    filename=fn,
+                    local_dir=self.config['Recognizer'][self.type]['model_dir'],
+                    local_dir_use_symlinks=False,
+                    token=self.config['Global']['hf_token_for_upload']
+                )
+
+            self.index = faiss.read_index(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index"))
+
+            with open(get_path(self.config['Recognizer'][self.type]['model_dir'], "txt"), 'r') as f:
+                self.candidates = f.read().splitlines()
+
+            if self.type == 'word':
+                self.candidates = [ord_str_to_word(candidate) for candidate in self.candidates]
+
+            if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
+                self.model = timm.create_model(f"hf-hub:{self.config['Recognizer'][self.type]['hf_repo_id']}", num_classes=0, pretrained=True)
+                self.input_name = None
+            elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
+                self.model, self.input_name, _ = initialize_onnx_model(
+                    get_path(self.config['Recognizer'][self.type]['model_dir'], ext="onnx"), 
+                    self.config['Recognizer'][self.type])
+                
+        else:
+
+            self.index = None
+            self.candidates = None
+            self.model = timm.create_model(self.config['Recognizer'][self.type]['timm_model_name'], num_classes=0, pretrained=True)
+            self.input_name = None
+            
+        self.model.to('cuda' if torch.cuda.is_available() else 'cpu')
 
     def __call__(self, images):
         return self.run(images)
@@ -220,6 +253,7 @@ class Recognizer:
         self._train()
 
         ## Initialize newly trained model
+        self.config['Recognizer'][self.type]['hf_repo_id'] = None
         self.initialize_model()
 
 
@@ -389,27 +423,13 @@ class Recognizer:
             wandb.init(project=self.config['Global']["wandb_project"], name=os.path.basename(self.config['Recognizer'][self.type]["model_dir"]))
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-        # load encoder
-
-        if not self.config['Recognizer'][self.type]['timm_model_name'] is None:
-            encoder = AutoEncoderFactory("timm", self.config['Recognizer'][self.type]['timm_model_name'])
-        else:
-            raise NotImplementedError
-
-        # init encoder
-
-        if get_path(self.config['Recognizer'][self.type]['model_dir'], contains="enc") is None:
-            enc = encoder()
-        else:
-            enc = encoder.load(get_path(self.config['Recognizer'][self.type]['model_dir'], contains="enc"))
-
         # data parallelism
 
         if torch.cuda.device_count() > 1:
             print("Let's use", torch.cuda.device_count(), "GPUs!")
             datapara = True
             self.datapara = True
-            enc = nn.DataParallel(enc)
+            self.model = nn.DataParallel(self.model)
         else:
             datapara = False
             self.datapara = False
@@ -451,7 +471,7 @@ class Recognizer:
 
         # optimizer and loss
 
-        optimizer = AdamW(enc.parameters(), lr=self.config['Recognizer'][self.type]["lr"], 
+        optimizer = AdamW(self.model.parameters(), lr=self.config['Recognizer'][self.type]["lr"], 
                           weight_decay=self.config['Recognizer'][self.type]["weight_decay"], 
                           betas=(self.config['Recognizer'][self.type]["adamw_beta1"], 
                                  self.config['Recognizer'][self.type]["adamw_beta2"]))
@@ -464,10 +484,11 @@ class Recognizer:
         best_acc = self.tester_knn(
             val_dataset, 
             render_dataset, 
-            enc, 
+            self.model, 
             split="zs", 
             log=not self.config['Global']["wandb_project"] is None
         )
+        self.save_model(self.config['Recognizer'][self.type]["model_dir"], self.model, "best", datapara)
         
         ##Log 
         if not self.config['Global']["wandb_project"] is None:
@@ -476,8 +497,8 @@ class Recognizer:
         # set  schedule
 
         if self.config['Recognizer'][self.type]["lr_schedule"]:
-            scheduler = CosineAnnealingDecWarmRestarts(optimizer, T_0=1000 if num_batches is None else num_batches, 
-                                                     T_mult=2, l_dec=0.9) 
+            scheduler = CosineAnnealingDecWarmRestarts(
+                optimizer, T_0=1000 if num_batches is None else num_batches, T_mult=2, l_dec=0.9) 
         else:
             scheduler = None
         
@@ -494,7 +515,7 @@ class Recognizer:
 
             acc = self.trainer_knn_with_eval(
                 val_dataset, render_dataset,
-                enc, loss_func, device, train_loader, 
+                self.model, loss_func, device, train_loader, 
                 optimizer, epoch, self.config['Recognizer'][self.type]["epoch_viz_dir"], 
                 self.config['Recognizer'][self.type]["diff_sizes"], scheduler,
                 int_eval_steps=self.config['Recognizer'][self.type]["int_eval_steps"],
@@ -505,7 +526,7 @@ class Recognizer:
             acc = self.tester_knn(
                 val_dataset, 
                 render_dataset, 
-                enc, 
+                self.model, 
                 split="val",
                 log=not self.config['Global']["wandb_project"] is None)
             
@@ -516,7 +537,7 @@ class Recognizer:
             if acc >= best_acc:
                 best_acc = acc
                 print("Saving model and index...")
-                self.save_model(self.config['Recognizer'][self.type]["model_dir"], enc, "best", datapara)
+                self.save_model(self.config['Recognizer'][self.type]["model_dir"], self.model, "best", datapara)
                 print("Model and index saved.")
 
                 if not scheduler is None:
@@ -527,13 +548,13 @@ class Recognizer:
 
         ## test with best encoder
 
-        del enc
-        best_enc = encoder.load(os.path.join(self.config['Recognizer'][self.type]["model_dir"], "enc_best.pth"))
-        self.save_ref_index(render_dataset, best_enc, self.config['Recognizer'][self.type]["model_dir"])
+        self.model.load_state_dict(torch.load(os.path.join(self.config['Recognizer'][self.type]["model_dir"], "best.pth")))
+
+        self.save_ref_index(render_dataset, self.model, self.config['Recognizer'][self.type]["model_dir"])
 
         if self.config['Recognizer'][self.type]["test_at_end"]:
             print("Testing on test set...")
-            self.tester_knn(test_dataset, render_dataset, best_enc, "test", log=not self.config['Global']["wandb_project"] is None)
+            self.tester_knn(test_dataset, render_dataset, self.model, "test", log=not self.config['Global']["wandb_project"] is None)
             print("Test set testing complete.")
 
         # optionally infer hard negatives (turned on by default, highly recommend to facilitate hard negative training)
@@ -549,7 +570,7 @@ class Recognizer:
                 self.infer_hardneg_dataset(
                     query_dataset, 
                     train_dataset if self.config['Recognizer'][self.type]["finetune"] else render_dataset, 
-                    best_enc, 
+                    self.model, 
                     os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ref.index"), 
                     os.path.join(self.config['Recognizer'][self.type]["model_dir"], "hns.txt"), 
                     k=self.config['Recognizer'][self.type]["hardneg_k"]
@@ -570,7 +591,7 @@ class Recognizer:
                 self.legacy_infer_hardneg(
                     query_paths, 
                     train_dataset if self.config['Recognizer'][self.type]["finetune"] else render_dataset, 
-                    best_enc, 
+                    self.model, 
                     os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ref.index"), 
                     transform, os.path.join(self.config['Recognizer'][self.type]["model_dir"], "hns.txt"), 
                     k=self.config['Recognizer'][self.type]["hardneg_k"], 
@@ -578,9 +599,36 @@ class Recognizer:
             
         # save results of trained model
 
-        self.config['Recognizer'][self.type]['index_path'] = os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ref.index")
-        self.config['Recognizer'][self.type]['candidates_path'] = os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ref.txt")
-        self.config['Recognizer'][self.type]['encoder_path'] = os.path.join(self.config['Recognizer'][self.type]["model_dir"], "enc_best.pth")
+        if self.config['Global']['hf_token_for_upload'] is not None:
+
+            login(token = self.config['Global']['hf_token_for_upload'])
+
+            pt_config = self.model.pretrained_cfg
+            if 'url' in pt_config:
+                del pt_config['url']
+
+            push_to_hf_hub(
+                self.model,
+                repo_id = os.path.basename(self.config['Recognizer'][self.type]["model_dir"]),
+                commit_message = f'Add {self.type} recognizer model',
+                token = self.config['Global']['hf_token_for_upload'],
+                private = True,
+                model_config = pt_config,
+            )
+
+            upload_file(
+                path_or_fileobj=os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ref.index"),
+                path_in_repo="ref.index",
+                repo_id=os.path.join(self.config['Global']['hf_username_for_upload'], os.path.basename(self.config['Recognizer'][self.type]["model_dir"])),
+                token=self.config['Global']['hf_token_for_upload']
+            )
+
+            upload_file(
+                path_or_fileobj=os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ref.txt"),
+                path_in_repo="ref.txt",
+                repo_id=os.path.join(self.config['Global']['hf_username_for_upload'], os.path.basename(self.config['Recognizer'][self.type]["model_dir"])),
+                token=self.config['Global']['hf_token_for_upload']
+            )
 
     
     def tester_knn(self, test_set, ref_set, model, split, log=False):
@@ -746,7 +794,7 @@ class Recognizer:
                     if wandb_log:
                         wandb.log({f"val/{self.type}/acc": acc})
                     if acc > zs_accuracy:
-                        self.save_model(self.config['Recognizer'][self.type]["model_dir"], model, "best_cer", self.datapara)
+                        self.save_model(self.config['Recognizer'][self.type]["model_dir"], model, "best", self.datapara)
                         zs_accuracy=acc
 
             if batch_idx % 100 == 0:
@@ -820,9 +868,9 @@ class Recognizer:
         if not os.path.exists(model_folder): os.makedirs(model_folder)
 
         if datapara:
-            torch.save(enc.module.state_dict(), os.path.join(model_folder, f"enc_{epoch}.pth"))
+            torch.save(enc.module.state_dict(), os.path.join(model_folder, f"{epoch}.pth"))
         else:
-            torch.save(enc.state_dict(), os.path.join(model_folder, f"enc_{epoch}.pth"))
+            torch.save(enc.state_dict(), os.path.join(model_folder, f"{epoch}.pth"))
 
 
     @staticmethod

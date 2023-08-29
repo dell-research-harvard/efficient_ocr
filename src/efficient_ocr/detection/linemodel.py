@@ -12,7 +12,7 @@ import cv2
 from math import floor, ceil
 import yolov5
 from yolov5 import train as yolov5_train
-from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub import hf_hub_download, snapshot_download, create_repo, login
 from collections import defaultdict
 import subprocess
 
@@ -35,11 +35,10 @@ class LineModel:
     def __init__(self, config):
 
         self.config = config
-        if self.config['Line']['huggingface_model'] is not None:
+        if self.config['Line']['hf_repo_id'] is not None:
             backend_ext = ".onnx" if self.config['Line']['model_backend'] == "onnx" else ".pt"
             snapshot_download(
-                repo_id=self.config['Line']['huggingface_model'], 
-                allow_patterns="*line*"+backend_ext,
+                repo_id=self.config['Line']['hf_repo_id'], 
                 local_dir=self.config['Line']['model_dir'],
                 local_dir_use_symlinks=False)
         self.initialize_model()
@@ -70,6 +69,7 @@ class LineModel:
             if get_path(self.config['Line']['model_dir'], ext='pt') is None:
                 self.model = yolov5.load('yolov5s.pt')
             else:
+                print("Loading pretrained model!")
                 self.model = yolov5.load(get_path(self.config['Line']['model_dir'], ext="pt"), device='cpu')
             self.model.conf = self.config['Line']['conf_thresh']  # NMS confidence threshold
             self.model.iou = self.config['Line']['iou_thresh']  # NMS IoU threshold
@@ -270,25 +270,32 @@ class LineModel:
         
         train_weights = get_path(self.config['Line']['model_dir'], ext="pt")
 
-        subprocess.run([
-            "yolov5", "train",
-            "--imgsz", str(self.config['Line']['input_shape'][0]),
-            "--data", yaml_loc,
-            "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
-            "--epochs", str(self.config['Line']['epochs']),
-            "--batch_size", str(self.config['Line']['batch_size']),
-            "--device", self.config['Line']['device'],
-            "--project", self.config['Line']['model_dir']])
-        
-        """
-        yolov5_train.run(
-            imgsz=self.config['Line']['input_shape'][0], 
-            data=yaml_loc,
-            weights=train_weights if train_weights is not None else 'yolov5s.pt', 
-            epochs=self.config['Line']['epochs'], 
-            batch_size=self.config['Line']['batch_size'], 
-            device=self.config['Line']['device'], 
-            project = self.config['Line']['model_dir'])
-        """
+        if self.config['Global']['hf_token_for_upload'] is None:
+            subprocess.run([
+                "yolov5", "train",
+                "--imgsz", str(self.config['Line']['input_shape'][0]),
+                "--data", yaml_loc,
+                "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
+                "--epochs", str(self.config['Line']['epochs']),
+                "--batch_size", str(self.config['Line']['batch_size']),
+                "--device", self.config['Line']['device'],
+                "--project", self.config['Line']['model_dir']])
+        else:
+            assert self.config['Global']['hf_username_for_upload'] is not None
+            subprocess.run(" ".join([
+                "huggingface-cli", "login", "--token", self.config['Global']['hf_token_for_upload'], 
+                "&&",
+                "yolov5", "train",
+                "--imgsz", str(self.config['Line']['input_shape'][0]),
+                "--data", yaml_loc,
+                "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
+                "--epochs", str(self.config['Line']['epochs']),
+                "--batch_size", str(self.config['Line']['batch_size']),
+                "--device", self.config['Line']['device'],
+                "--project", self.config['Line']['model_dir'],
+                "--hf_model_id", os.path.join(self.config['Global']['hf_username_for_upload'], 
+                                              os.path.basename(self.config['Line']['model_dir'])),
+                "--hf_token", self.config['Global']['hf_token_for_upload'],
+                "--hf_private"]), shell=True)
                         
         self.initialize_model()

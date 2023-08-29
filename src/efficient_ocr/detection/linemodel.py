@@ -63,23 +63,21 @@ class LineModel:
             _type_: _description_
         """
 
-        os.makedirs(self.config['Line']['model_dir'], exist_ok=True)
-
         if self.config['Line']['model_backend'] == 'yolov5':
             if get_path(self.config['Line']['model_dir'], ext='pt') is None:
                 self.model = yolov5.load('yolov5s.pt')
             else:
-                print("Loading pretrained model!")
+                print("Loading pretrained line detection model!")
                 self.model = yolov5.load(get_path(self.config['Line']['model_dir'], ext="pt"), device='cpu')
-            self.model.conf = self.config['Line']['conf_thresh']  # NMS confidence threshold
-            self.model.iou = self.config['Line']['iou_thresh']  # NMS IoU threshold
+            self.model.conf = self.config['Line']['training']['conf_thresh']  # NMS confidence threshold
+            self.model.iou = self.config['Line']['training']['iou_thresh']  # NMS IoU threshold
             self.model.agnostic = False  # NMS class-agnostic
             self.model.multi_label = False  # NMS multiple labels per box
-            self.model.max_det = self.config['Line']['max_det']  # maximum number of detections per image
+            self.model.max_det = self.config['Line']['training']['max_det']  # maximum number of detections per image
 
         elif self.config['Line']['model_backend'] == 'onnx' and not dir_is_empty(self.config['Line']['model_dir']):
             self.model, self._input_name, self._input_shape = \
-                initialize_onnx_model(get_path(self.config['Line']['model_dir'], ext="onnx"), self.config['Line'])
+                initialize_onnx_model(get_path(self.config['Line']['model_dir'], ext="onnx"), self.config['Line']['training'])
 
         elif self.config['Line']['model_backend'] == 'mmdetection':
             raise NotImplementedError('mmdetection not yet implemented!')
@@ -118,7 +116,7 @@ class LineModel:
         #YOLO NMS is carried out now, other backends will filter by bbox confidence score later
         if self.config['Line']['model_backend'] == 'onnx':  
             preds = [torch.from_numpy(pred[0]) for pred in results]
-            preds = [yolov5_non_max_suppression(pred, conf_thres = self.config['Line']['conf_thresh'], iou_thres=self.config['Line']['iou_thresh'], max_det=self.config['Line']['max_det'])[0] for pred in preds]
+            preds = [yolov5_non_max_suppression(pred, conf_thres = self.config['Line']['training']['conf_thresh'], iou_thres=self.config['Line']['training']['iou_thresh'], max_det=self.config['Line']['training']['max_det'])[0] for pred in preds]
 
         elif self.config['Line']['model_backend'] == 'yolov5':
             preds = [result.pred[0] for result in results]
@@ -234,33 +232,30 @@ class LineModel:
 
     def get_crops_from_layout_image(self, image):
         im_width, im_height = image.shape[1], image.shape[0]
-        if im_height <= im_width * self.config['Line']['min_seg_ratio']:
+        if im_height <= im_width * self.config['Line']['training']['min_seg_ratio']:
             return [image]
         else:
             y0 = 0
-            y1 = im_width * self.config['Line']['min_seg_ratio']
+            y1 = im_width * self.config['Line']['training']['min_seg_ratio']
             crops = []
             while y1 <= im_height:
                 crops.append(image[y0:y1, 0:im_width])
-                y0 += int(im_width * self.config['Line']['min_seg_ratio'] * 0.75) # .75 factor ensures there is overlap between crops
-                y1 += int(im_width * self.config['Line']['min_seg_ratio'] * 0.75)
+                y0 += int(im_width * self.config['Line']['training']['min_seg_ratio'] * 0.75) # .75 factor ensures there is overlap between crops
+                y1 += int(im_width * self.config['Line']['training']['min_seg_ratio'] * 0.75)
             
             crops.append(image[y0:im_height, 0:im_width])
             return crops
 
 
     def train(self, data_json, data_dir, **kwargs):
+
         if not self.config['Line']['model_backend'] == 'yolov5':
             raise NotImplementedError('Training is only implemented for yolo backend')
         
         if kwargs:
             config = dictmerge(config, kwargs)
 
-        """
-        for key in TRAINING_REQUIRED_ARGS:
-            if key not in self.config.keys():
-                raise ValueError(f'Missing required argument {key} for training!')
-        """
+        os.makedirs(self.config['Line']['model_dir'], exist_ok=True)
             
         # Create yolo training data from coco
         yaml_loc = create_yolo_training_data(
@@ -273,26 +268,28 @@ class LineModel:
         if self.config['Global']['hf_token_for_upload'] is None:
             subprocess.run([
                 "yolov5", "train",
-                "--imgsz", str(self.config['Line']['input_shape'][0]),
+                "--imgsz", str(self.config['Line']['training']['input_shape'][0]),
                 "--data", yaml_loc,
                 "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
-                "--epochs", str(self.config['Line']['epochs']),
-                "--batch_size", str(self.config['Line']['batch_size']),
+                "--epochs", str(self.config['Line']['training']['epochs']),
+                "--batch_size", str(self.config['Line']['training']['batch_size']),
                 "--device", self.config['Line']['device'],
-                "--project", self.config['Line']['model_dir']])
+                "--project", self.config['Line']['model_dir'],
+                "--name", "trained"])
         else:
             assert self.config['Global']['hf_username_for_upload'] is not None
             subprocess.run(" ".join([
                 "huggingface-cli", "login", "--token", self.config['Global']['hf_token_for_upload'], 
                 "&&",
                 "yolov5", "train",
-                "--imgsz", str(self.config['Line']['input_shape'][0]),
+                "--imgsz", str(self.config['Line']['training']['input_shape'][0]),
                 "--data", yaml_loc,
                 "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
-                "--epochs", str(self.config['Line']['epochs']),
-                "--batch_size", str(self.config['Line']['batch_size']),
+                "--epochs", str(self.config['Line']['training']['epochs']),
+                "--batch_size", str(self.config['Line']['training']['batch_size']),
                 "--device", self.config['Line']['device'],
                 "--project", self.config['Line']['model_dir'],
+                "--name", "trained",
                 "--hf_model_id", os.path.join(self.config['Global']['hf_username_for_upload'], 
                                               os.path.basename(self.config['Line']['model_dir'])),
                 "--hf_token", self.config['Global']['hf_token_for_upload'],

@@ -29,18 +29,20 @@ class EffOCR:
             self, config = dict(), 
             data_json = None, data_dir = None, 
             line_detector = None, localizer = None, 
-            word_recognizer = None, char_recognizer = None, onnx = False,
+            word_recognizer = None, char_recognizer = None,
             **kwargs
         ):
 
         print(f'GPU is available?: {torch.cuda.is_available()}')
 
         self.training_funcs = {
-            'line_detection': self._train_line,
-            'word_and_character_detection': self._train_localizer,
-            'word_recognition': self._train_word_recognizer,
-            'char_recognition': self._train_char_recognizer
+            'line_detector': self._train_line,
+            'localizer': self._train_localizer,
+            'word_recognizer': self._train_word_recognizer,
+            'char_recognizer': self._train_char_recognizer
         }
+
+        ## ingest
         
         if data_json is not None:
             with open(data_json, 'r') as f:
@@ -55,18 +57,16 @@ class EffOCR:
             
         self.config = self._load_config(config, **kwargs)
 
-        if onnx:
-            self.config['Line']['model_backend'] = "onnx"
-            self.config['Localizer']['model_backend'] = "onnx"
-            self.config['Recognizer']['word']['model_backend'] = "onnx"
-            self.config['Recognizer']['char']['model_backend'] = "onnx"
+        ## checks
 
-        if self.config['Line']['model_backend'] == "onnx" or \
-                self.config['Localizer']['model_backend'] == "onnx" or \
-                self.config['Recognizer']['word']['model_backend'] == "onnx" or \
-                self.config['Recognizer']['char']['model_backend'] == "onnx":
-            raise NotImplementedError("The ONNX backend is not currently supported, but will be shortly!")
+        if self.config['Line']['model_backend'] != "yolov5" or \
+                self.config['Localizer']['model_backend'] != "yolov5" or \
+                self.config['Recognizer']['word']['model_backend'] != "timm" or \
+                self.config['Recognizer']['char']['model_backend'] != "timm":
+            raise NotImplementedError("Only the YOLOv5 and timm backends are currently supported!")
         
+        ## load from args
+
         if not line_detector is None:
             if os.path.isdir(line_detector):
                 self.config['Line']['model_dir'] = line_detector
@@ -87,7 +87,20 @@ class EffOCR:
                 self.config['Recognizer']['char']['model_dir'] = char_recognizer
             else:
                 self.config['Recognizer']['char']['hf_repo_id'] = char_recognizer
+
+        ## sensible naming conventions
+
+        if self.config['Line']['hf_repo_id'] is not None and self.config['Line']['model_dir'] == "./line_model":
+            self.config['Line']['model_dir'] = f"./{os.path.basename(self.config['Line']['hf_repo_id'])}"
+        if self.config['Localizer']['hf_repo_id'] is not None and self.config['Localizer']['model_dir'] == "./localizer_model":
+            self.config['Localizer']['model_dir'] = f"./{os.path.basename(self.config['Localizer']['hf_repo_id'])}"
+        if self.config['Recognizer']['char']['hf_repo_id'] is not None and self.config['Recognizer']['char']['model_dir'] == "./char_model":
+            self.config['Recognizer']['char']['model_dir'] = f"./{os.path.basename(self.config['Recognizer']['char']['hf_repo_id'])}"
+        if self.config['Recognizer']['word']['hf_repo_id'] is not None and self.config['Recognizer']['word']['model_dir'] == "./word_model":
+            self.config['Recognizer']['word']['model_dir'] = f"./{os.path.basename(self.config['Recognizer']['word']['hf_repo_id'])}"
         
+        ## subset init
+
         if self.config['Global']['char_only'] and self.config['Global']['recognition_only']:
             self.char_model = self._initialize_char_recognizer()
         elif self.config['Global']['recognition_only']:
@@ -104,6 +117,7 @@ class EffOCR:
             if not self.config['Global']['skip_line_detection']:
                 self.line_model = self._initialize_line()
             self.localizer_model = self._initialize_localizer()       
+            
 
     def _load_config(self, config, **kwargs):
         
@@ -146,8 +160,14 @@ class EffOCR:
         
         if isinstance(target, str):
             target = [target]
+        elif target is None and self.config['Global']['char_only']:
+            target = ['line_detector', 'localizer', 'char_recognizer']
+        elif target is None and self.config['Global']['recognition_only']:
+            target = ['word_recognizer', 'char_recognizer']
+        elif target is None and self.config['Global']['skip_line_detection']:
+            target = ['localizer', 'word_recognizer', 'char_recognizer']
         elif target is None:
-            target = ['line_detection', 'word_and_character_detection', 'word_recognition', 'char_recognition']
+            target = ['line_detector', 'localizer', 'word_recognizer', 'char_recognizer']
         elif not isinstance(target, list):
             raise ValueError('target must be a single training procedure or a list of training procedures')
 

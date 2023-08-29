@@ -178,6 +178,8 @@ tests/
 
 # yolo results
 runs/
+wandb/
+config/
 
 
 # legacy recognizer dir

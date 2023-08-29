@@ -151,32 +151,9 @@ class Recognizer:
 
     def initialize_model(self):
 
-        if not get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index") is None:
+        if not self.config['Recognizer'][self.type]['hf_repo_id'] is None:
 
-            print("Loading (local) pretrained model!")
-
-            self.index = faiss.read_index(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index"))
-
-            with open(get_path(self.config['Recognizer'][self.type]['model_dir'], "txt"), 'r') as f:
-                self.candidates = f.read().splitlines()
-
-            if self.type == 'word':
-                self.candidates = [ord_str_to_word(candidate) for candidate in self.candidates]
-
-            if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
-                self.model = timm.create_model(self.config['Recognizer'][self.type]['timm_model_name'], num_classes=0, pretrained=True)
-                pretrained_dict = torch.load(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="pth"))
-                self.model.load_state_dict(pretrained_dict)
-                self.input_name = None
-
-            elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
-                self.model, self.input_name, _ = initialize_onnx_model(
-                    get_path(self.config['Recognizer'][self.type]['model_dir'], ext="onnx"), 
-                    self.config['Recognizer'][self.type])
-
-        elif not self.config['Recognizer'][self.type]['hf_repo_id'] is None:
-
-            print("Loading (HF) pretrained model!")
+            print(f"Loading (HF) pretrained {self.type} recognizer model!")
 
             for fn in ['ref.txt', 'ref.index']:
                 hf_hub_download(
@@ -201,7 +178,32 @@ class Recognizer:
             elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
                 self.model, self.input_name, _ = initialize_onnx_model(
                     get_path(self.config['Recognizer'][self.type]['model_dir'], ext="onnx"), 
-                    self.config['Recognizer'][self.type])
+                    self.config['Recognizer'][self.type]['training'])
+
+        elif not get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index") is None:
+        
+            print(f"Loading (local) pretrained {self.type} recognizer model!")
+
+            self.index = faiss.read_index(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index"))
+
+            with open(get_path(self.config['Recognizer'][self.type]['model_dir'], "txt"), 'r') as f:
+                self.candidates = f.read().splitlines()
+
+            if self.type == 'word':
+                self.candidates = [ord_str_to_word(candidate) for candidate in self.candidates]
+
+            if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
+                self.model = timm.create_model(self.config['Recognizer'][self.type]['timm_model_name'], num_classes=0, pretrained=True)
+                pretrained_dict = torch.load(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="pth"))
+                self.model.load_state_dict(pretrained_dict)
+                self.input_name = None
+
+            elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
+                self.model, self.input_name, _ = initialize_onnx_model(
+                    get_path(self.config['Recognizer'][self.type]['model_dir'], ext="onnx"), 
+                    self.config['Recognizer'][self.type]['training'])
+
+ 
                 
         else:
 
@@ -244,6 +246,9 @@ class Recognizer:
         if not self.config['Recognizer'][self.type]['model_backend'] == 'timm':
             raise NotImplementedError('Training is only supported for timm models')
         
+        assert self.config['Recognizer'][self.type]['training']['render_dict'] is not None
+        assert self.config['Recognizer'][self.type]['training']['font_dir_path'] is not None
+        
         os.makedirs(self.config['Recognizer'][self.type]["model_dir"], exist_ok=True)
 
         ## Create training data from input coco if not already created
@@ -262,7 +267,7 @@ class Recognizer:
         Transcriptions are currently being passed along with file names
         """
 
-        self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"] = \
+        self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"] = \
             os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ready_to_go_training_data")
 
         if not os.path.exists(os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ready_to_go_training_data")):
@@ -301,16 +306,16 @@ class Recognizer:
 
             # create synthetic data
 
-            if self.config['Recognizer'][self.type]["render_dict"] is None:
+            if self.config['Recognizer'][self.type]['training']["render_dict"] is None:
                 raise ValueError("render_dict "+self.type+" must be specified if existing training data is not specified")
-            elif self.config['Recognizer'][self.type]["font_dir_path"] is None:
+            elif self.config['Recognizer'][self.type]['training']["font_dir_path"] is None:
                 raise ValueError("font_dir_path must be specified if existing training data is not specified")
 
             render_all_synth_in_parallel(
-                self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"], 
-                self.config['Recognizer'][self.type]["font_dir_path"], 
-                glob(os.path.join(f"{self.config['Recognizer'][self.type]['render_dict']}", "*")), 
-                self.config['Recognizer'][self.type]["ascender"]
+                self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"], 
+                self.config['Recognizer'][self.type]['training']["font_dir_path"], 
+                glob(os.path.join(f"{self.config['Recognizer'][self.type]['training']['render_dict']}", "*")), 
+                self.config['Recognizer'][self.type]['training']["ascender"]
             )
 
             # add in paired data
@@ -320,12 +325,12 @@ class Recognizer:
             for k, v in tqdm(self.anno_crop_and_text_dict.items()):
                 for anno_img_path in v:
                     assert "PAIRED" in anno_img_path
-                    shutil.copy(anno_img_path, os.path.join(self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"], k))
-                    self.all_paired_image_paths.append(os.path.join(self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"], k, anno_img_path))
+                    shutil.copy(anno_img_path, os.path.join(self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"], k))
+                    self.all_paired_image_paths.append(os.path.join(self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"], k, anno_img_path))
 
         else:
 
-            self.all_paired_image_paths = glob(os.path.join(self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"], "**", "PAIRED*"), recursive=True)
+            self.all_paired_image_paths = glob(os.path.join(self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"], "**", "PAIRED*"), recursive=True)
 
 
     def _paths_from_coco_json(self, coco_json_path):
@@ -347,14 +352,14 @@ class Recognizer:
         np.random.seed(splitseed)
         np.random.shuffle(self.all_paired_image_paths)
 
-        train_pct, val_pct, test_pct = self.config['Recognizer'][self.type]["train_val_test_split"]
+        train_pct, val_pct, test_pct = self.config['Recognizer'][self.type]['training']["train_val_test_split"]
         train_end_idx = int(len(self.all_paired_image_paths) * train_pct)
         val_end_idx = int(len(self.all_paired_image_paths) * (train_pct + val_pct))
 
-        if not self.config['Recognizer'][self.type]['few_shot'] is None:
+        if not self.config['Recognizer'][self.type]['training']['few_shot'] is None:
 
-            if not self.config['Recognizer'][self.type]['train_set_from_coco_json'] is None:
-                all_train_paths = [x['file_name'] for x in self._paths_from_coco_json(self.config['Recognizer'][self.type]['train_set_from_coco_json'])['images']]
+            if not self.config['Recognizer'][self.type]['training']['train_set_from_coco_json'] is None:
+                all_train_paths = [x['file_name'] for x in self._paths_from_coco_json(self.config['Recognizer'][self.type]['training']['train_set_from_coco_json'])['images']]
             else:
                 all_train_paths = self.all_paired_image_paths[:train_end_idx]
 
@@ -367,7 +372,7 @@ class Recognizer:
 
             few_shot_paired_image_paths = []
             for k, v in self.cat_path_dict.items():
-                few_shot_samples = np.random.choice(v, min(len(v), self.config['Recognizer'][self.type]['few_shot']), replace=False).tolist()
+                few_shot_samples = np.random.choice(v, min(len(v), self.config['Recognizer'][self.type]['training']['few_shot']), replace=False).tolist()
                 few_shot_paired_image_paths.extend([{"file_name": fss} for fss in few_shot_samples])
 
             train_paired_image_paths = {"images": few_shot_paired_image_paths}
@@ -378,8 +383,8 @@ class Recognizer:
         else:
 
             # train
-            if not self.config['Recognizer'][self.type]['train_set_from_coco_json'] is None:
-                train_paired_image_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['train_set_from_coco_json'])
+            if not self.config['Recognizer'][self.type]['training']['train_set_from_coco_json'] is None:
+                train_paired_image_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['training']['train_set_from_coco_json'])
             else:
                 train_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[:train_end_idx]]}
             train_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_dir"], f"train_paired_image_paths.json")
@@ -387,8 +392,8 @@ class Recognizer:
                 json.dump(train_paired_image_paths, f)
             
         # val
-        if not self.config['Recognizer'][self.type]['val_set_from_coco_json'] is None:
-            val_paired_image_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['val_set_from_coco_json'])
+        if not self.config['Recognizer'][self.type]['training']['val_set_from_coco_json'] is None:
+            val_paired_image_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['training']['val_set_from_coco_json'])
         else:
             val_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[train_end_idx:val_end_idx]]}
         val_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_dir"], f"val_paired_image_paths.json")
@@ -396,8 +401,8 @@ class Recognizer:
             json.dump(val_paired_image_paths, f)
 
         # test
-        if not self.config['Recognizer'][self.type]['test_set_from_coco_json'] is None:
-            test_paired_image_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['test_set_from_coco_json'])
+        if not self.config['Recognizer'][self.type]['training']['test_set_from_coco_json'] is None:
+            test_paired_image_paths = self._paths_from_coco_json(self.config['Recognizer'][self.type]['training']['test_set_from_coco_json'])
         else:
             test_paired_image_paths = {"images": [{"file_name": x} for x in self.all_paired_image_paths[val_end_idx:]]}
         test_paired_image_json_path = os.path.join(self.config['Recognizer'][self.type]["model_dir"], f"test_paired_image_paths.json")
@@ -439,43 +444,43 @@ class Recognizer:
         train_dataset, val_dataset, test_dataset, \
                     train_loader, val_loader, test_loader, num_batches = \
             create_dataset(
-                self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"], 
+                self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"], 
                 train_paired_image_json_path,
                 val_paired_image_json_path, 
                 test_paired_image_json_path, 
-                self.config['Recognizer'][self.type]["batch_size"],
-                hardmined_txt=self.config['Recognizer'][self.type]["hns_txt_path"], 
+                self.config['Recognizer'][self.type]['training']["batch_size"],
+                hardmined_txt=self.config['Recognizer'][self.type]['training']["hns_txt_path"], 
                 train_mode=self.type,
-                m=self.config['Recognizer'][self.type]["m"], 
-                finetune=self.config['Recognizer'][self.type]["finetune"],
-                pretrain=self.config['Recognizer'][self.type]["pretrain"],
-                high_blur=self.config['Recognizer'][self.type]["high_blur"],
-                latin_suggested_augs=self.config['Recognizer'][self.type]["latin_suggested_augs"],
-                char_trans_version=self.config['Recognizer'][self.type]["char_trans_version"],
-                diff_sizes=self.config['Recognizer'][self.type]["diff_sizes"],
-                imsize=self.config['Recognizer'][self.type]["imsize"],
-                num_passes=self.config['Recognizer'][self.type]["num_passes"],
-                no_aug=self.config['Recognizer'][self.type]["no_aug"],
-                k=self.config['Recognizer'][self.type]["hardneg_k"],
-                aug_paired=self.config['Recognizer'][self.type]["aug_paired"],
-                expansion_factor=self.config['Recognizer'][self.type]["expansion_factor"],
-                tvt_split=self.config['Recognizer'][self.type]["train_val_test_split"]
+                m=self.config['Recognizer'][self.type]['training']["m"], 
+                finetune=self.config['Recognizer'][self.type]['training']["finetune"],
+                pretrain=self.config['Recognizer'][self.type]['training']["pretrain"],
+                high_blur=self.config['Recognizer'][self.type]['training']["high_blur"],
+                latin_suggested_augs=self.config['Recognizer'][self.type]['training']["latin_suggested_augs"],
+                char_trans_version=self.config['Recognizer'][self.type]['training']["char_trans_version"],
+                diff_sizes=self.config['Recognizer'][self.type]['training']["diff_sizes"],
+                imsize=self.config['Recognizer'][self.type]['training']["imsize"],
+                num_passes=self.config['Recognizer'][self.type]['training']["num_passes"],
+                no_aug=self.config['Recognizer'][self.type]['training']["no_aug"],
+                k=self.config['Recognizer'][self.type]['training']["hardneg_k"],
+                aug_paired=self.config['Recognizer'][self.type]['training']["aug_paired"],
+                expansion_factor=self.config['Recognizer'][self.type]['training']["expansion_factor"],
+                tvt_split=self.config['Recognizer'][self.type]['training']["train_val_test_split"]
         )
 
         render_dataset = create_render_dataset(
-            self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"],
+            self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"],
             train_mode=self.type,
-            font_name=self.config['Recognizer'][self.type]["default_font_name"],
-            imsize=self.config['Recognizer'][self.type]["imsize"],
+            font_name=self.config['Recognizer'][self.type]['training']['default_font_name'],
+            imsize=self.config['Recognizer'][self.type]['training']["imsize"],
         )
 
         # optimizer and loss
 
-        optimizer = AdamW(self.model.parameters(), lr=self.config['Recognizer'][self.type]["lr"], 
-                          weight_decay=self.config['Recognizer'][self.type]["weight_decay"], 
-                          betas=(self.config['Recognizer'][self.type]["adamw_beta1"], 
-                                 self.config['Recognizer'][self.type]["adamw_beta2"]))
-        loss_func = losses.SupConLoss(temperature = self.config['Recognizer'][self.type]["temp"]) 
+        optimizer = AdamW(self.model.parameters(), lr=self.config['Recognizer'][self.type]['training']["lr"], 
+                          weight_decay=self.config['Recognizer'][self.type]['training']["weight_decay"], 
+                          betas=(self.config['Recognizer'][self.type]['training']["adamw_beta1"], 
+                                 self.config['Recognizer'][self.type]['training']["adamw_beta2"]))
+        loss_func = losses.SupConLoss(temperature = self.config['Recognizer'][self.type]['training']["temp"]) 
 
         # get zero-shot accuracy
         self.accuracy_calculator = AccuracyCalculator(include = ("precision_at_1",), k = 1)
@@ -496,7 +501,7 @@ class Recognizer:
 
         # set  schedule
 
-        if self.config['Recognizer'][self.type]["lr_schedule"]:
+        if self.config['Recognizer'][self.type]['training']["lr_schedule"]:
             scheduler = CosineAnnealingDecWarmRestarts(
                 optimizer, T_0=1000 if num_batches is None else num_batches, T_mult=2, l_dec=0.9) 
         else:
@@ -506,19 +511,19 @@ class Recognizer:
 
         print("Training...")
 
-        if not self.config['Recognizer'][self.type]["epoch_viz_dir"] is None: 
-            os.makedirs(self.config['Recognizer'][self.type]["epoch_viz_dir"], exist_ok=True)
+        if not self.config['Recognizer'][self.type]['training']["epoch_viz_dir"] is None: 
+            os.makedirs(self.config['Recognizer'][self.type]['training']["epoch_viz_dir"], exist_ok=True)
 
         for epoch in range(
-                self.config['Recognizer'][self.type]["start_epoch"], 
-                self.config['Recognizer'][self.type]["num_epochs"]+self.config['Recognizer'][self.type]["start_epoch"]):
+                self.config['Recognizer'][self.type]['training']["start_epoch"], 
+                self.config['Recognizer'][self.type]['training']["num_epochs"]+self.config['Recognizer'][self.type]['training']["start_epoch"]):
 
             acc = self.trainer_knn_with_eval(
                 val_dataset, render_dataset,
                 self.model, loss_func, device, train_loader, 
-                optimizer, epoch, self.config['Recognizer'][self.type]["epoch_viz_dir"], 
-                self.config['Recognizer'][self.type]["diff_sizes"], scheduler,
-                int_eval_steps=self.config['Recognizer'][self.type]["int_eval_steps"],
+                optimizer, epoch, self.config['Recognizer'][self.type]['training']["epoch_viz_dir"], 
+                self.config['Recognizer'][self.type]['training']["diff_sizes"], scheduler,
+                int_eval_steps=self.config['Recognizer'][self.type]['training']["int_eval_steps"],
                 zs_accuracy=best_acc if best_acc != None else 0,
                 wandb_log=not self.config['Global']["wandb_project"] is None
             )
@@ -552,28 +557,28 @@ class Recognizer:
 
         self.save_ref_index(render_dataset, self.model, self.config['Recognizer'][self.type]["model_dir"])
 
-        if self.config['Recognizer'][self.type]["test_at_end"]:
+        if self.config['Recognizer'][self.type]['training']["test_at_end"]:
             print("Testing on test set...")
             self.tester_knn(test_dataset, render_dataset, self.model, "test", log=not self.config['Global']["wandb_project"] is None)
             print("Test set testing complete.")
 
         # optionally infer hard negatives (turned on by default, highly recommend to facilitate hard negative training)
 
-        if not self.config['Recognizer'][self.type]["hardneg_k"] is None:
+        if not self.config['Recognizer'][self.type]['training']["hardneg_k"] is None:
             if self.type == "word":
                 query_paths = [x[0] for x in train_dataset.data if os.path.basename(x[0])]
                 print("Number of query paths: ", len(query_paths))
                 query_paths, query_dataset = self.prepare_hn_query_paths(
-                    query_paths, train_dataset, paired_hn=True, image_size=self.config['Recognizer'][self.type]["imsize"])
+                    query_paths, train_dataset, paired_hn=True, image_size=self.config['Recognizer'][self.type]['training']["imsize"])
                 print(f"Num hard neg paths: {len(query_paths)}")    
-                transform = create_paired_transform(self.config['Recognizer'][self.type]["imsize"])
+                transform = create_paired_transform(self.config['Recognizer'][self.type]['training']["imsize"])
                 self.infer_hardneg_dataset(
                     query_dataset, 
-                    train_dataset if self.config['Recognizer'][self.type]["finetune"] else render_dataset, 
+                    train_dataset if self.config['Recognizer'][self.type]['training']["finetune"] else render_dataset, 
                     self.model, 
                     os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ref.index"), 
                     os.path.join(self.config['Recognizer'][self.type]["model_dir"], "hns.txt"), 
-                    k=self.config['Recognizer'][self.type]["hardneg_k"]
+                    k=self.config['Recognizer'][self.type]['training']["hardneg_k"]
                 )
             else:
                 ## LEGACY
@@ -587,15 +592,15 @@ class Recognizer:
                     for k, v in query_path_char_map.items():
                         query_paths.append(np.random.choice(v))
                 print(f"Num hard neg paths: {len(query_paths)}")
-                transform = create_paired_transform(self.config['Recognizer'][self.type]["imsize"])
+                transform = create_paired_transform(self.config['Recognizer'][self.type]['training']["imsize"])
                 self.legacy_infer_hardneg(
                     query_paths, 
-                    train_dataset if self.config['Recognizer'][self.type]["finetune"] else render_dataset, 
+                    train_dataset if self.config['Recognizer'][self.type]['training']["finetune"] else render_dataset, 
                     self.model, 
                     os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ref.index"), 
                     transform, os.path.join(self.config['Recognizer'][self.type]["model_dir"], "hns.txt"), 
-                    k=self.config['Recognizer'][self.type]["hardneg_k"], 
-                    finetune=self.config['Recognizer'][self.type]["finetune"])
+                    k=self.config['Recognizer'][self.type]['training']["hardneg_k"], 
+                    finetune=self.config['Recognizer'][self.type]['training']["finetune"])
             
         # save results of trained model
 
@@ -706,7 +711,7 @@ class Recognizer:
         if paired_hn:
             ##Get paired paths
             query_paths = [x[0] for x in train_dataset.data if "PAIRED" in os.path.basename(x[0])]
-            unpaired_paths=[x[0] for x in train_dataset.data if "PAIRED" not in os.path.basename(x[0]) and self.config['Recognizer'][self.type]["default_font_name"] in os.path.basename(x[0])]
+            unpaired_paths=[x[0] for x in train_dataset.data if "PAIRED" not in os.path.basename(x[0]) and self.config['Recognizer'][self.type]['training']['default_font_name'] in os.path.basename(x[0])]
             ####Get only one unpaired path per word - dedup
             unpaired_paths_dedup = []
             unpaired_path_words = [os.path.basename(x).split("-word-")[1].split(".")[0] for x in unpaired_paths]
@@ -750,7 +755,7 @@ class Recognizer:
             for path in query_paths:
                 f.write(f"{path}\n")
 
-        query_dataset = create_hn_query_dataset(self.config['Recognizer'][self.type]["ready_to_go_data_dir_path"], imsize=image_size,hn_query_list=query_paths)
+        query_dataset = create_hn_query_dataset(self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"], imsize=image_size,hn_query_list=query_paths)
 
         print(f"Num hard neg paths: {len(query_paths)}")    
         return query_paths, query_dataset
@@ -844,7 +849,7 @@ class Recognizer:
 
 
     @staticmethod
-    def save_ref_index(ref_dataset, model, save_path,prefix=""):
+    def save_ref_index(ref_dataset, model, save_path, prefix=""):
 
         knn_func = FaissKNN(index_init_fn=faiss.IndexFlatIP, reset_before=False, reset_after=False)
         infm = InferenceModel(model, knn_func=knn_func)

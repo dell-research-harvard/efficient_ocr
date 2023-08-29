@@ -103,6 +103,7 @@ class LocalizerModel:
                 local_dir_use_symlinks=False)
         self.initialize_model()
 
+
     def initialize_model(self):
         """Initializes the model based on the model backend
 
@@ -110,19 +111,18 @@ class LocalizerModel:
             _type_: _description_
         """
 
-        os.makedirs(self.config['Localizer']['model_dir'], exist_ok=True)
         self.input_name = None
         if self.config['Localizer']['model_backend'] == 'yolov5':
             if get_path(self.config['Localizer']['model_dir'], ext='pt') is None:
                 self.model = yolov5.load('yolov5s.pt')
             else:
-                print("Loading pretrained model!")
+                print("Loading pretrained localizer model!")
                 self.model = yolov5.load(get_path(self.config['Localizer']['model_dir'], ext="pt"), device='cpu')
-            self.model.conf = self.config['Localizer']['conf_thresh']  # NMS confidence threshold
-            self.model.iou = self.config['Localizer']['iou_thresh']  # NMS IoU threshold
+            self.model.conf = self.config['Localizer']['training']['conf_thresh']  # NMS confidence threshold
+            self.model.iou = self.config['Localizer']['training']['iou_thresh']  # NMS IoU threshold
             self.model.agnostic = False  # NMS class-agnostic
             self.model.multi_label = False  # NMS multiple labels per box
-            self.model.max_det = self.config['Localizer']['max_det']  # maximum number of detections per image
+            self.model.max_det = self.config['Localizer']['training']['max_det']  # maximum number of detections per image
         elif self.config['Localizer']['model_backend'] == 'onnx' and not dir_is_empty(self.config['Localizer']['model_dir']):
             self.model, self.input_name, self.input_shape = \
                 initialize_onnx_model(get_path(self.config['Localizer']['model_dir'], ext="onnx"), self.config["Localizer"])
@@ -147,10 +147,10 @@ class LocalizerModel:
             raise ValueError('Invalid model backend specified and/or model directory empty')
         
         
-
     def __call__(self, line_results):
         return self.run(line_results)
     
+
     def run(self, line_results):
         if not isinstance(line_results, defaultdict):
             raise ValueError('line_results must be a defaultdict(list) with keys corresponding to box ids and lists of tuples as line results for those boxes, with (img, bounding box coordinates)')
@@ -200,9 +200,9 @@ class LocalizerModel:
             if self.config['Localizer']['model_backend'] == 'onnx':  
                 preds = [torch.from_numpy(pred) for pred in preds]
                 preds = [yolov5_non_max_suppression(
-                    pred, conf_thres = self.config['Localizer']['conf_thresh'], 
-                    iou_thres=self.config['Localizer']['iou_thresh'], 
-                    max_det=self.config['Localizer']['max_det'])[0] for pred in preds]
+                    pred, conf_thres = self.config['Localizer']['training']['conf_thresh'], 
+                    iou_thres=self.config['Localizer']['training']['iou_thresh'], 
+                    max_det=self.config['Localizer']['training']['max_det'])[0] for pred in preds]
                 preds = preds[0]
             else:
                 preds = preds.pred[0]
@@ -279,18 +279,16 @@ class LocalizerModel:
 
         return localizer_results
     
+
     def train(self, data_json, data_dir, **kwargs):
+
         if self.config['Localizer']['model_backend'] != 'yolov5':
             raise NotImplementedError('Only YOLO model backend is currently supported for training!')
         
         if kwargs:
             config = dictmerge(config, kwargs)
 
-        """
-        for key in TRAINING_REQUIRED_ARGS:
-            if key not in self.config.keys():
-                raise ValueError(f'Missing required argument {key} for training!')
-        """
+        os.makedirs(self.config['Localizer']['model_dir'], exist_ok=True)
 
         # Create yolo training data from coco
         yaml_loc = create_yolo_training_data(
@@ -303,26 +301,28 @@ class LocalizerModel:
         if self.config['Global']['hf_token_for_upload'] is None:
             subprocess.run([
                 "yolov5", "train",
-                "--imgsz", str(self.config['Localizer']['input_shape'][0]),
+                "--imgsz", str(self.config['Localizer']['training']['input_shape'][0]),
                 "--data", yaml_loc,
                 "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
-                "--epochs", str(self.config['Localizer']['epochs']),
-                "--batch_size", str(self.config['Localizer']['batch_size']),
+                "--epochs", str(self.config['Localizer']['training']['epochs']),
+                "--batch_size", str(self.config['Localizer']['training']['batch_size']),
                 "--device", self.config['Localizer']['device'],
-                "--project", self.config['Localizer']['model_dir']])
+                "--project", self.config['Localizer']['model_dir'],
+                "--name", "trained"])
         else:
             assert self.config['Global']['hf_username_for_upload'] is not None
             subprocess.run(" ".join([
                 "huggingface-cli", "login", "--token", self.config['Global']['hf_token_for_upload'], 
                 "&&",
                 "yolov5", "train",
-                "--imgsz", str(self.config['Localizer']['input_shape'][0]),
+                "--imgsz", str(self.config['Localizer']['training']['input_shape'][0]),
                 "--data", yaml_loc,
                 "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
-                "--epochs", str(self.config['Localizer']['epochs']),
-                "--batch_size", str(self.config['Localizer']['batch_size']),
+                "--epochs", str(self.config['Localizer']['training']['epochs']),
+                "--batch_size", str(self.config['Localizer']['training']['batch_size']),
                 "--device", self.config['Localizer']['device'],
                 "--project", self.config['Localizer']['model_dir'],
+                "--name", "trained",
                 "--hf_model_id", os.path.join(self.config['Global']['hf_username_for_upload'], 
                                               os.path.basename(self.config['Localizer']['model_dir'])),
                 "--hf_token", self.config['Global']['hf_token_for_upload'],

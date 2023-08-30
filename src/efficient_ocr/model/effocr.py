@@ -260,7 +260,7 @@ class EffOCR:
         '''
 
         if not self.config['Global']['skip_line_detection']:
-            line_results = self.line_model.run_simple(imgs, **kwargs) 
+            line_results = self.line_model(imgs, **kwargs) 
             # [(np.array(line_crop).astype(np.float32), (y0, x0, y1, x1)), ...]
         else:
             line_results = defaultdict(list)
@@ -285,9 +285,7 @@ class EffOCR:
                 }}
         '''
 
-        localizer_results = self.localizer_model.run_simple(line_results, **kwargs) # Passes back detections and cropped images
-        print(localizer_results)
-        exit(1)
+        localizer_results = self.localizer_model(line_results, **kwargs) # Passes back detections and cropped images
         
         '''
         Last character recognition:

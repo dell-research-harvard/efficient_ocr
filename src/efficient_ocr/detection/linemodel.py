@@ -1,9 +1,4 @@
-'''
-Class for EffOCR Line Detection Model
-'''
-
 import os
-import sys
 # import mmcv
 import torch
 import numpy as np
@@ -11,36 +6,29 @@ import torchvision
 import cv2
 from math import floor, ceil
 import yolov5
-from yolov5 import train as yolov5_train
-from huggingface_hub import hf_hub_download, snapshot_download, create_repo, login
+from huggingface_hub import snapshot_download
 from collections import defaultdict
 import subprocess
 
-from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, get_onnx_input_name, initialize_onnx_model
+from ..utils import letterbox, yolov5_non_max_suppression, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
-from ..utils import create_yolo_training_data, create_yolo_yaml
-from ..utils import all_but_last_in_path, last_in_path, get_path, dictmerge, dir_is_empty
-
-
-# TRAINING_REQUIRED_ARGS = ['epochs', 'batch_size', 'line_training_name', 'device']
+from ..utils import create_yolo_training_data
+from ..utils import get_path, dictmerge, dir_is_empty
 
 
 class LineModel:
-    """
-    Class for running the EffOCR line detection model. Essentially a wrapper for the onnxruntime 
-    inference session based on the model, wit some additional postprocessing, especially regarding splitting and 
-    recombining especailly tall layout regions
-    """
+
 
     def __init__(self, config):
 
         self.config = config
+
         if self.config['Line']['hf_repo_id'] is not None:
-            backend_ext = ".onnx" if self.config['Line']['model_backend'] == "onnx" else ".pt"
             snapshot_download(
                 repo_id=self.config['Line']['hf_repo_id'], 
                 local_dir=self.config['Line']['model_dir'],
                 local_dir_use_symlinks=False)
+            
         self.initialize_model()
 
 
@@ -83,7 +71,31 @@ class LineModel:
             raise NotImplementedError('mmdetection not yet implemented!')
         else:
             raise ValueError('Invalid model backend specified and/or model directory empty')
+
     
+    def run_simple(self, imgs):
+
+        line_results = defaultdict(list)
+
+        if self.config['Line']['model_backend'] == 'yolov5':
+            for idx, img in enumerate(imgs):
+                result = self.model(img, augment=False)
+                pred = result.pred[0]
+                if pred.size(0) == 0:
+                    continue
+                bboxes, confs, labels = pred[:, :4], pred[:, 5], pred[:, 6]
+                for bbox in bboxes:
+                    x0, y0, x1, y1 = map(round, bbox)
+                    line_crop = img[y0:y1, x0:x1]
+                    if line_crop.shape[0] == 0 or line_crop.shape[1] == 0:
+                        continue
+                    line_results[idx].append((np.array(line_crop).astype(np.float32), (y0, x0, y1, x1)))
+        else:
+            raise NotImplementedError
+
+        return line_results
+        
+
     def run(self, imgs):
 
         if isinstance(imgs, list):
@@ -113,25 +125,22 @@ class LineModel:
 
     
     def _postprocess(self, results, imgs, num_img_crops, img_shapes, orig_imgs):
-        #YOLO NMS is carried out now, other backends will filter by bbox confidence score later
+
+        # Note: YOLO NMS is carried out now, other backends will filter by bbox confidence score later
         if self.config['Line']['model_backend'] == 'onnx':  
             preds = [torch.from_numpy(pred[0]) for pred in results]
             preds = [yolov5_non_max_suppression(pred, conf_thres = self.config['Line']['training']['conf_thresh'], iou_thres=self.config['Line']['training']['iou_thresh'], max_det=self.config['Line']['training']['max_det'])[0] for pred in preds]
-
         elif self.config['Line']['model_backend'] == 'yolov5':
             preds = [result.pred[0] for result in results]
-
-        elif self._model_backend == 'mmdetection':
+        elif self.config['Line']['model_backend'] == 'mmdetection':
             raise NotImplementedError('mmdetection not yet implemented!')
     
-        ### At this point preds is a list of
         start = 0
         final_preds = []
         for idxs in num_img_crops:
             adjusted_preds = self.adjust_line_preds(preds[start:start+idxs], imgs[start:start+idxs], img_shapes[start:start+idxs])
-            final_preds.append(self.readjust_line_predictions(adjusted_preds, imgs[start].shape[1]))
+            final_preds.append(self.readjust_line_predictions(adjusted_preds, imgs[start].shape[1], self.config['Line']['training']['iou_thresh']))
             start += idxs
-
 
         line_results = defaultdict(list)
         for i, final_pred in enumerate(final_preds):
@@ -140,21 +149,21 @@ class LineModel:
                 line_crop = orig_imgs[i][y0:y1, x0:x1]
                 if line_crop.shape[0] == 0 or line_crop.shape[1] == 0:
                     continue
-
-                # Line crops becomes a list of tuples (bbox_id, line_crop [the image itself], line_proj_crop [the coordinates of the line in the layout image])
                 line_results[i].append((np.array(line_crop).astype(np.float32), (y0, x0, y1, x1)))
 
         return line_results
 
 
     def adjust_line_preds(self, preds, imgs, orig_shapes):
+
         adjusted_preds = []
 
         for pred, shape in zip(preds, orig_shapes):
+
             line_predictions = pred[pred[:, 1].sort()[1]]
             line_bboxes, line_confs, line_labels = line_predictions[:, :4], line_predictions[:, -2], line_predictions[:, -1]
-
             im_width, im_height = shape[1], shape[0]
+
             if self.config['Line']['model_backend'] == 'onnx':
                 if im_width > im_height:
                     h_ratio = (im_height / im_width) * 640
@@ -162,7 +171,6 @@ class LineModel:
                 else:
                     h_trans = 0
                     h_ratio = 640
-
                 line_proj_crops = []
                 for line_bbox in line_bboxes:
                     x0, y0, x1, y1 = torch.round(line_bbox)
@@ -170,9 +178,8 @@ class LineModel:
                                     im_width, int(ceil((y1.item() - h_trans) * im_height  / h_ratio))
                 
                     line_proj_crops.append((x0, y0, x1, y1))
-
-            # No need to rescale when using yolo natively
             elif self.config['Line']['model_backend'] == 'yolov5':
+                # No need to rescale when using yolo natively
                 line_proj_crops = []
                 for line_bbox in line_bboxes:
                     x0, y0, x1, y1 = torch.round(line_bbox)
@@ -185,8 +192,10 @@ class LineModel:
             adjusted_preds.append((line_proj_crops, line_confs, line_labels))
 
         return adjusted_preds
-            
-    def readjust_line_predictions(self, line_preds, orig_img_width):
+
+
+    def readjust_line_predictions(self, line_preds, orig_img_width, iou_thresh):
+
         y0 = 0
         dif = int(orig_img_width * 1.5)
         all_preds, final_preds = [], []
@@ -198,7 +207,7 @@ class LineModel:
         
         all_preds = torch.tensor(all_preds)
         if all_preds.dim() > 1:
-            keep_preds = torchvision.ops.nms(all_preds[:, :4], all_preds[:, -1], iou_threshold=0.15)
+            keep_preds = torchvision.ops.nms(all_preds[:, :4], all_preds[:, -1], iou_threshold=iou_thresh)
             filtered_preds = all_preds[keep_preds, :4]
             filtered_preds = filtered_preds[filtered_preds[:, 1].sort()[1]]
             for pred in filtered_preds:
@@ -208,8 +217,10 @@ class LineModel:
             return final_preds
         else:
             return []
-             
+
+
     def format_line_img(self, img):
+
         if self.config['Line']['model_backend'] == 'onnx':
             im = letterbox(img, stride=32, auto=False)[0]  # padded resize
             im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
@@ -229,6 +240,7 @@ class LineModel:
             raise NotImplementedError('Backend {} is not implemented'.format(self.config['model_backend']))
         
         return im
+
 
     def get_crops_from_layout_image(self, image):
         im_width, im_height = image.shape[1], image.shape[0]
@@ -296,3 +308,4 @@ class LineModel:
                 "--hf_private"]), shell=True)
                         
         self.initialize_model()
+

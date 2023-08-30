@@ -1,27 +1,20 @@
-'''
-Class for EffOCR Localization Model
-'''
-
-
 import os
-import json
 import yolov5
-from yolov5 import train as yolov5_train
 import numpy as np
 from collections import defaultdict
 import threading
 import torch
 import queue
-from huggingface_hub import hf_hub_download, snapshot_download, create_repo, login
+from huggingface_hub import snapshot_download
 import multiprocessing
 import subprocess
 # from mmdet.apis import init_detector, inference_detector
 
 
-from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, en_preprocess, initialize_onnx_model
+from ..utils import letterbox, yolov5_non_max_suppression, en_preprocess, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
-from ..utils import create_yolo_training_data, create_yolo_yaml
-from ..utils import all_but_last_in_path, last_in_path, get_path, dictmerge, dir_is_empty
+from ..utils import create_yolo_training_data
+from ..utils import get_path, dictmerge, dir_is_empty
 
 
 PARA_WEIGHT_L = 3
@@ -90,17 +83,17 @@ class LocalizerEngineExecutorThread(threading.Thread):
 
 class LocalizerModel:
 
-    def __init__(self, config):
-        """Instantiates the object, including setting up the wrapped ONNX InferenceSession"""
 
-        '''Set up the config'''
+    def __init__(self, config):
+
         self.config = config
+
         if self.config['Localizer']['hf_repo_id'] is not None:
-            backend_ext = ".onnx" if self.config['Localizer']['model_backend'] == "onnx" else ".pt"
             snapshot_download(
                 repo_id=self.config['Localizer']['hf_repo_id'], 
                 local_dir=self.config['Localizer']['model_dir'],
                 local_dir_use_symlinks=False)
+            
         self.initialize_model()
 
 
@@ -151,7 +144,48 @@ class LocalizerModel:
         return self.run(line_results)
     
 
+    def run_simple(self, line_results):
+
+        localizer_results = defaultdict(list)
+
+        if self.config['Localizer']['model_backend'] == 'yolov5':
+
+            for img_idx, lines in line_results.items():
+
+                lines = sorted(lines, key=lambda x: x[1][0] if self.config['Localizer']['vertical'] else x[1][1])
+
+                for lineimg, (y0, x0, y1, x1) in lines:
+
+                    result = self.model(lineimg, augment=False)
+                    pred = result.pred[0]
+
+                    if pred.size(0) == 0:
+                        continue
+
+                    pred = pred[np.apply_along_axis(lambda x: x[1] if self.config['Localizer']['vertical'] else x[0], axis=0, arr=pred).argsort()]
+                    bboxes, confs, labels = pred[:, :4], pred[:, 5], pred[:, 6]
+
+                    line_result = []
+
+                    for box, label in zip(bboxes, labels):
+                        x0, y0, x1, y1 = torch.round(box)
+                        x0, y0, x1, y1 = int(x0.item()), int(y0.item()), int(x1.item()), int(y1.item())
+                        if x0 == x1 or y0 == y1 or x1 < 0 or y1 < 0:
+                            continue
+                        if x0 < 0: x0 = 0
+                        if y0 < 0: y0 = 0
+                        line_result.append((lineimg[y0:y1, x0:x1], (y0, x0, y1, x1), "char" if label==1 else "word"))
+
+                    localizer_results[img_idx].append(line_result)
+        
+        else:
+            raise NotImplementedError
+        
+        return localizer_results
+
+
     def run(self, line_results):
+
         if not isinstance(line_results, defaultdict):
             raise ValueError('line_results must be a defaultdict(list) with keys corresponding to box ids and lists of tuples as line results for those boxes, with (img, bounding box coordinates)')
         
@@ -329,3 +363,4 @@ class LocalizerModel:
                 "--hf_private"]), shell=True)
                         
         self.initialize_model()
+

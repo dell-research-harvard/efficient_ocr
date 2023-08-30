@@ -195,8 +195,8 @@ class EffOCR:
         self.char_model.train(self.data_json, self.data_dir, **kwargs)
 
     
-    ### TOM
     def infer(self, imgs, make_coco_annotations=None, visualize=None, save_crops = None, **kwargs):
+        
         '''
         Inference pipeline has five steps:
         1. Loading and formatting images
@@ -235,6 +235,7 @@ class EffOCR:
                 3. A list of image paths
                 4. A list of numpy arrays
         '''
+        
         if isinstance(imgs, str):
             if os.path.isdir(imgs):
                 imgs = [os.path.join(imgs, img) for img in os.listdir(imgs)]
@@ -257,12 +258,15 @@ class EffOCR:
                 mapping the index of the original image (in the order they were passed from the above function) to a list of tuples, 
                 with each tuple in the format (textline img, (bounding box coordinates (y0, x0, y1, x1)))
         '''
+
         if not self.config['Global']['skip_line_detection']:
-            line_results = self.line_model(imgs, **kwargs) 
+            line_results = self.line_model.run_simple(imgs, **kwargs) 
+            # [(np.array(line_crop).astype(np.float32), (y0, x0, y1, x1)), ...]
         else:
             line_results = defaultdict(list)
             for i, img in enumerate(imgs):
                 line_results[i].append((img, (0, 0, img.shape[0], img.shape[1])))
+
         '''
         Word and character localization:
             Input: detections as a defaultdict(list) as described above
@@ -280,7 +284,10 @@ class EffOCR:
                     ...
                 }}
         '''
-        localizer_results = self.localizer_model(line_results, **kwargs) # Passes back detections and cropped images
+
+        localizer_results = self.localizer_model.run_simple(line_results, **kwargs) # Passes back detections and cropped images
+        print(localizer_results)
+        exit(1)
         
         '''
         Last character recognition:
@@ -303,6 +310,7 @@ class EffOCR:
                 Where 'final_puncs' is a list with the same length as the word list for each entry, with the predicted final character of each word, if it is a punctuation mark. 
                 If a punctuation mark was detected, all of the characters list, the overlaps object, and the word image and bounding boxes will be adjusted to reflect that detection. 
         '''
+
         if not self.config['Global']['char_only']:
             # TODO: skip on language from config
             last_char_results = infer_last_chars(localizer_results, self.char_model, **kwargs) # Passes back detections and cropped images
@@ -375,6 +383,7 @@ class EffOCR:
                 text: the full predicted text
                 preds: the full predictions dictionary, as described above
         '''
+
         if make_coco_annotations is not None or visualize is not None or save_crops is not None:
             make_coco_from_effocr_result(final_results, imgs, save_path=make_coco_annotations if isinstance(make_coco_annotations, str) else "./data/coco_annotations.json")
 

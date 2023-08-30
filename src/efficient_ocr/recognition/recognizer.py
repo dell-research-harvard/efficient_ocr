@@ -1,8 +1,3 @@
-'''
-Recognizer Class
-
-Essentially holds an encoder, an faiss reference index, and a list of candidate words/characters corresponding to the reference index. 
-'''
 import faiss
 import timm
 from timm.models.hub import push_to_hf_hub
@@ -30,8 +25,7 @@ from torch.optim import AdamW
 import wandb
 from collections import defaultdict
 import shutil
-from huggingface_hub import hf_hub_download, snapshot_download, create_repo, login, upload_file
-
+from huggingface_hub import hf_hub_download, login, upload_file
 from tqdm import tqdm
 
 from ..utils import initialize_onnx_model
@@ -42,8 +36,7 @@ from ..utils.recognition.synth_crops import render_all_synth_in_parallel
 from ..utils.recognition.datasets import create_dataset, create_render_dataset, create_hn_query_dataset
 from ..utils.recognition.transforms import create_paired_transform, INV_NORMALIZE
 from ..utils.recognition.custom_schedulers import CosineAnnealingDecWarmRestarts
-from ..utils.recognition.encoders import AutoEncoderFactory
-from ..utils import get_path, dictmerge, dir_is_empty
+from ..utils import get_path, dictmerge
 
 
 def str_to_ord_str(string):
@@ -174,6 +167,7 @@ class Recognizer:
 
             if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
                 self.model = timm.create_model(f"hf-hub:{self.config['Recognizer'][self.type]['hf_repo_id']}", num_classes=0, pretrained=True)
+                self.save_model(self.config['Recognizer'][self.type]["model_dir"], self.model, "pretrained", False)
                 self.input_name = None
             elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
                 self.model, self.input_name, _ = initialize_onnx_model(

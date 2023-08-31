@@ -8,6 +8,7 @@ DEFAULT_CONFIG = {
         'wandb_project': None,
         'hf_username_for_upload': None,
         'hf_token_for_upload': None,
+        'min_word_sim': 0.8
     },
     'Recognizer': {
         'char': {
@@ -17,6 +18,7 @@ DEFAULT_CONFIG = {
             'hf_repo_id': None,
             'num_cores': None,
             'providers': None,
+            'device': 'cpu',
             'training': {
                 'render_dict': None,
                 'font_dir_path': None,
@@ -65,6 +67,7 @@ DEFAULT_CONFIG = {
             'hf_repo_id': None,
             'num_cores': None,
             'providers': None,
+            'device': 'cpu',
             'training': {
                 'render_dict': None,
                 'font_dir_path': None,

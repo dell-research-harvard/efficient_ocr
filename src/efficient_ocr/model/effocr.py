@@ -8,6 +8,7 @@ from collections import defaultdict
 import os
 import torch
 import cv2
+from PIL import Image
 
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
 from ..recognition import Recognizer, infer_last_chars, infer_words, infer_chars
@@ -196,7 +197,6 @@ class EffOCR:
 
     
     def infer(self, imgs, make_coco_annotations=None, visualize=None, save_crops = None, **kwargs):
-        
         '''
         Inference pipeline has five steps:
         1. Loading and formatting images
@@ -235,7 +235,7 @@ class EffOCR:
                 3. A list of image paths
                 4. A list of numpy arrays
         '''
-        
+
         if isinstance(imgs, str):
             if os.path.isdir(imgs):
                 imgs = [os.path.join(imgs, img) for img in os.listdir(imgs)]
@@ -261,7 +261,6 @@ class EffOCR:
 
         if not self.config['Global']['skip_line_detection']:
             line_results = self.line_model(imgs, **kwargs) 
-            # [(np.array(line_crop).astype(np.float32), (y0, x0, y1, x1)), ...]
         else:
             line_results = defaultdict(list)
             for i, img in enumerate(imgs):
@@ -394,6 +393,60 @@ class EffOCR:
 
         return final_results
     
+
+    def infer_simple(self, imgs):
+        
+        if isinstance(imgs, str):
+            if os.path.isdir(imgs):
+                imgs = [os.path.join(imgs, img) for img in os.listdir(imgs)]
+            else:
+                imgs = [imgs]
+
+        elif isinstance(imgs, np.ndarray):
+            imgs = [imgs]
+        elif not isinstance(imgs, list):
+            raise ValueError('imgs must be a single image path/numpy array or a list of image paths/numpy arrays')
+        elif not all([isinstance(img, str) for img in imgs]) or not all([isinstance(img, np.ndarray) for img in imgs]):
+            raise ValueError('imgs must be a single image path/numpy array or a list of image paths/numpy arrays')
+        
+        imgs = [Image.open(img) for img in imgs]
+        img_texts = []
+
+        for img in imgs:
+
+            img_text = ""
+
+            # for a given line: (np.array(line_crop).astype(np.float32), (x0, y0, x1, y1))
+            if not self.config['Global']['skip_line_detection']:
+                line_results = self.line_model.run_simple(img)
+            else:
+                line_results = [(img, (0, 0, img.shape[1], img.shape[0]))]
+
+            localizer_results = self.localizer_model.run_simple(line_results)
+            
+            for line_level_locl_results in localizer_results:
+                if not self.config['Global']['char_only']:
+                    # for a given line: [((word_img, word_coords), [(char_img, char_coords), ...]), ...]
+                    for word_result, char_results in line_level_locl_results:
+                        word_dist, word_cand = self.word_model.run_simple(word_result)
+                        if word_dist[0] >= self.config['Global']['min_word_sim']:
+                            img_text += word_cand + " "
+                        else:
+                            char_dist, char_cand = self.char_model.run_simple(char_results)
+                            img_text += char_cand + " "
+                    img_text += "\n"
+                else: 
+                    # for a given line: [(char_img, char_coords), ...]
+                    char_results = line_level_locl_results
+                    char_dist, char_cand = self.char_model.run_simple(char_results)
+                    img_text += char_cand + "\n"
+
+            print(img_text)
+            img_texts.append(img_text)
+
+        return img_texts
+    
+
     '''
     Model Initialization Functions
     '''

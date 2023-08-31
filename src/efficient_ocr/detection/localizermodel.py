@@ -8,6 +8,7 @@ import queue
 from huggingface_hub import snapshot_download
 import multiprocessing
 import subprocess
+import torchvision.ops.boxes as bops
 # from mmdet.apis import init_detector, inference_detector
 
 
@@ -20,6 +21,34 @@ from ..utils import get_path, dictmerge, dir_is_empty
 PARA_WEIGHT_L = 3
 PARA_WEIGHT_R = 1
 PARA_THRESH = 5
+
+
+def box_area(boxes):
+    return (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+
+
+def _box_inter_union_min(boxes1, boxes2):
+
+    area1 = box_area(boxes1)
+    area2 = box_area(boxes2)
+
+    lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])  # [N,M,2]
+    rb = torch.min(boxes1[:, None, 2:], boxes2[:, 2:])  # [N,M,2]
+    wh = rb - lt  # [N,M,2]
+    inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
+
+    union = area1[:, None] + area2 - inter
+    minimum = torch.min(area1[:, None], area2)
+
+    return inter, union, minimum
+
+
+def torch_iom_iou(boxes1, boxes2):
+
+    inter, union, minimum = _box_inter_union_min(boxes1, boxes2)
+    iou = inter / union
+    iom = inter / minimum
+    return iom, iou
 
 
 def iteration(model, input):
@@ -42,6 +71,14 @@ def blank_localizer_response():
             'chars': [],
             'overlaps': [],
             'para_end': False }
+
+
+def safe_coords(x0, y0, x1, y1, line_w, line_h):
+    if x0 == x1 or y0 == y1 or x1 < 0 or y1 < 0 or x0 > line_w or y0 > line_h:
+        return None
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(x1, line_w), min(y1, line_h)
+    return x0, y0, x1, y1
 
 
 class LocalizerEngineExecutorThread(threading.Thread):
@@ -144,44 +181,74 @@ class LocalizerModel:
         return self.run(line_results)
     
 
-    def run_simple(self, line_results):
+    def run_simple(self, line_result_for_single_image, thresh=0.75):
 
-        localizer_results = defaultdict(list)
+        locl_result_for_single_image = []
+        line_result_for_single_image = sorted(
+            line_result_for_single_image, 
+            key=lambda x: x[1][0] if self.config['Localizer']['vertical'] else x[1][1]
+        )
 
         if self.config['Localizer']['model_backend'] == 'yolov5':
 
-            for img_idx, lines in line_results.items():
+            for line_img, (lx0, ly0, lx1, ly1) in line_result_for_single_image:
 
-                lines = sorted(lines, key=lambda x: x[1][0] if self.config['Localizer']['vertical'] else x[1][1])
+                line_h = ly1 - ly0; line_w = lx1 - lx0
+                result = self.model(line_img, augment=False)
+                pred = result.pred[0]
+                pred = pred[pred[:, 1].sort()[1]] if self.config['Localizer']['vertical'] else pred[pred[:, 0].sort()[1]]
 
-                for lineimg, (y0, x0, y1, x1) in lines:
+                if pred.size(0) == 0:
+                    continue
 
-                    result = self.model(lineimg, augment=False)
-                    pred = result.pred[0]
+                bboxes, confs, labels = pred[:,:4], pred[:,4], pred[:,5]
+                char_bboxes = bboxes[labels == 0]
+                word_bboxes = bboxes[labels == 1]
 
-                    if pred.size(0) == 0:
-                        continue
+                if not self.config['Global']['char_only']:
 
-                    pred = pred[np.apply_along_axis(lambda x: x[1] if self.config['Localizer']['vertical'] else x[0], axis=0, arr=pred).argsort()]
-                    bboxes, confs, labels = pred[:, :4], pred[:, 5], pred[:, 6]
+                    word_result_char_result_tuples_for_line = []
+                    iom, iou = torch_iom_iou(word_bboxes, char_bboxes)
 
-                    line_result = []
+                    for i, wbbox in enumerate(word_bboxes):
+                        wx0, wy0, wx1, wy1 = map(round, wbbox.numpy().tolist())
+                        wx0, wy0, wx1, wy1 = safe_coords(wx0, wy0, wx1, wy1, line_w, line_h)
+                        word_locl_img = line_img.crop((wx0, wy0, wx1, wy1))
+                        word_result = (word_locl_img, (wx0, wy0, wx1, wy1))
+                        char_results_for_word = []
+                        for j, cbbox in enumerate(char_bboxes):
+                            if iom[i,j] >= thresh:
+                                cx0, cy0, cx1, cy1 = map(round, cbbox.numpy().tolist())
+                                cx0, cy0, cx1, cy1 = safe_coords(cx0, cy0, cx1, cy1, line_w, line_h)
+                                char_locl_img = line_img.crop((cx0, cy0, cx1, cy1))
+                                char_locl_img.save(f"./saved_crops/saveim{j}.png")
+                                char_results_for_word.append((char_locl_img, (cx0, cy0, cx1, cy1)))
+                        word_result_char_result_tuples_for_line.append((word_result, char_results_for_word))
 
-                    for box, label in zip(bboxes, labels):
-                        x0, y0, x1, y1 = torch.round(box)
-                        x0, y0, x1, y1 = int(x0.item()), int(y0.item()), int(x1.item()), int(y1.item())
-                        if x0 == x1 or y0 == y1 or x1 < 0 or y1 < 0:
-                            continue
-                        if x0 < 0: x0 = 0
-                        if y0 < 0: y0 = 0
-                        line_result.append((lineimg[y0:y1, x0:x1], (y0, x0, y1, x1), "char" if label==1 else "word"))
+                        # for a given line: [
+                        #   ((word_img, word_coords), [(char_img, char_coords), ...]), 
+                        # ...]
 
-                    localizer_results[img_idx].append(line_result)
-        
+                    locl_result_for_single_image.append(word_result_char_result_tuples_for_line)
+
+                else:
+
+                    char_result_tuples_for_line = []
+                    for i, cbbox in enumerate(char_bboxes):
+                        cx0, cy0, cx1, cy1 = map(round, cbbox.numpy().tolist())
+                        cx0, cy0, cx1, cy1 = safe_coords(cx0, cy0, cx1, cy1, line_w, line_h)
+                        char_locl_img = line_img.crop((cx0, cy0, cx1, cy1))
+                        char_result_tuples_for_line.append((char_locl_img, (cx0, cy0, cx1, cy1)))
+                
+                    # for a given line: 
+                    #   [(char_img, char_coords), ...]
+
+                    locl_result_for_single_image.append(char_result_tuples_for_line)
+
         else:
             raise NotImplementedError
         
-        return localizer_results
+        return locl_result_for_single_image
 
 
     def run(self, line_results):

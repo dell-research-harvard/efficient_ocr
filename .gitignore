@@ -180,6 +180,8 @@ tests/
 runs/
 wandb/
 config/
+effocr_en*
+news_*
 
 
 # legacy recognizer dir

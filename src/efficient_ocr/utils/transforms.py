@@ -3,6 +3,7 @@ from torchvision import transforms as T
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from PIL import Image
 
+
 class MedianPadWord:
     """This padding preserves the aspect ratio of the image. It also pads the image with the median value of the border pixels.
     Note how it also centres the ROI in the padded image."""
@@ -29,41 +30,47 @@ class MedianPadWord:
         medval = tuple([int(v) for v in np.median(bordervals, axis=0)])
         return T.Pad(padding, fill=medval if self.override is None else self.override)(image)
     
+
 class MedianPad:
 
-    def __init__(self, fill):
-        self.fill = fill
+    def __init__(self, override=None):
 
-    def __call__(self, imgarray):
-        max_side = max(imgarray.shape)
-        pad_y, pad_x, _ = [max_side - s for s in imgarray.shape]
+        self.override = override
+
+    def __call__(self, image):
+
+        image = Image.fromarray(image) if isinstance(image, np.ndarray) else image
+        max_side = max(image.size)
+        pad_x, pad_y = [max_side - s for s in image.size]
         padding = (0, 0, pad_x, pad_y)
-        pil_im = Image.fromarray(imgarray)
-        return T.Pad(padding, fill=self.fill)(pil_im)
+
+        imgarray = np.array(image)
+        h, w, c = imgarray.shape
+        rightb, leftb = imgarray[:,w-1,:], imgarray[:,0,:]
+        topb, bottomb = imgarray[0,:,:], imgarray[h-1,:,:]
+        bordervals = np.concatenate([rightb, leftb, topb, bottomb], axis=0)
+        medval = tuple([int(v) for v in np.median(bordervals, axis=0)])
+
+        return T.Pad(padding, fill=medval if self.override is None else self.override)(image)
 
 
 def get_transform(type='char', size=224):
+
     if type == 'char':
         return T.Compose([
-            MedianPad(fill=(255,255,255)),
+            MedianPad(override=(255,255,255)),
             T.ToTensor(),
             T.Resize((size, size)),
             T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
             lambda x: x.unsqueeze(0)
         ])
-    
     elif type == 'word':
         return T.Compose([
-            # SquarePad(),
             MedianPadWord(aspect_cutoff=0),
-            # T.Resize(size=(224,224)),
-            # patch_resize,
             T.ToTensor(),
             T.Resize((size, size)),
             T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
             lambda x: x.unsqueeze(0)
-            # featx_transform,
         ])
-    
     else:
         raise ValueError('Unknown type for recognizer: {}'.format(type))

@@ -1,7 +1,7 @@
 
-import numpy as np
 
 END_PUNCTUATION = '.?!,;:"\''
+
 
 def infer_chars(word_results, recognizer, char_only=False):
     # Assemble all the char crops from the results dictionary into a list
@@ -62,6 +62,7 @@ def infer_chars(word_results, recognizer, char_only=False):
 
     return word_results
 
+
 def infer_words(last_char_results, recognizer, threshold = 0.83):
     # Assemble all the word crops from the results dictionary into a list
     word_crops = []
@@ -83,7 +84,6 @@ def infer_words(last_char_results, recognizer, threshold = 0.83):
                 results_idx += 1
 
     return last_char_results
-
 
 
 def infer_last_chars(localizer_results, recognizer):
@@ -130,4 +130,3 @@ def infer_last_chars(localizer_results, recognizer):
 
     return localizer_results
 
-            

@@ -10,6 +10,9 @@ import PIL
 import os
 from glob import glob
 import re
+import cv2
+from PIL import Image
+import torchvision
 
 import torch
 import torch.nn as nn
@@ -37,6 +40,11 @@ from ..utils.recognition.datasets import create_dataset, create_render_dataset, 
 from ..utils.recognition.transforms import create_paired_transform, INV_NORMALIZE
 from ..utils.recognition.custom_schedulers import CosineAnnealingDecWarmRestarts
 from ..utils import get_path, dictmerge
+
+
+def chunks(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
 
 
 def str_to_ord_str(string):
@@ -135,12 +143,14 @@ class RecognizerEngine:
 
 class Recognizer:
 
+
     def __init__(self, config, type = 'char'):
 
         self.config = config
-        self.type = type             
-        self.transform = get_transform(type)
+        self.type = type
+        self.transform = get_transform(type, self.config['Recognizer'][self.type]['training']['imsize'])
         self.initialize_model()
+
 
     def initialize_model(self):
 
@@ -189,6 +199,7 @@ class Recognizer:
             if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
                 self.model = timm.create_model(self.config['Recognizer'][self.type]['timm_model_name'], num_classes=0, pretrained=True)
                 pretrained_dict = torch.load(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="pth"))
+                pretrained_dict = {k.replace("net.", ""): v for k, v in pretrained_dict.items()}
                 self.model.load_state_dict(pretrained_dict)
                 self.input_name = None
 
@@ -197,8 +208,6 @@ class Recognizer:
                     get_path(self.config['Recognizer'][self.type]['model_dir'], ext="onnx"), 
                     self.config['Recognizer'][self.type]['training'])
 
- 
-                
         else:
 
             self.index = None
@@ -206,11 +215,35 @@ class Recognizer:
             self.model = timm.create_model(self.config['Recognizer'][self.type]['timm_model_name'], num_classes=0, pretrained=True)
             self.input_name = None
             
-        self.model.to('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model.to(self.config['Recognizer'][self.type]['device'])
+        self.knn_func = FaissKNN(index_init_fn=faiss.IndexFlatIP, reset_before=False, reset_after=False)
+        self.infm = InferenceModel(self.model, knn_func=self.knn_func, data_device='cpu')
+        self.infm.load_knn_func(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index"))
+
 
     def __call__(self, images):
         return self.run(images)
     
+
+    def run_simple(self, results):
+
+        # for a given line: [
+        #   ((word_img, word_coords), [(char_img, char_coords), ...]), 
+        # ...]
+        # this function takes as input the first word tuple or the list of char tuples
+
+        if not isinstance(results, list):
+            results = [results]
+
+        imgs = [self.transform(x[0].convert('RGB'))[0] for x in results]
+        stacked_imgs = torch.stack(imgs)
+
+        distances, indices = self.infm.get_nearest_neighbors(stacked_imgs, k=1)
+        distances = [d.item() for d in distances]
+        candidates = [self.candidates[index[0]] for index in indices]
+       
+        return distances, "".join(candidates)
+
 
     def run(self, images, cutoff = None):
         
@@ -244,6 +277,7 @@ class Recognizer:
         assert self.config['Recognizer'][self.type]['training']['font_dir_path'] is not None
         
         os.makedirs(self.config['Recognizer'][self.type]["model_dir"], exist_ok=True)
+        self.model.to('cuda' if torch.cuda.is_available() else 'cpu')
 
         ## Create training data from input coco if not already created
         self._get_training_data(data_json, data_dir)

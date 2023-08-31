@@ -73,27 +73,26 @@ class LineModel:
             raise ValueError('Invalid model backend specified and/or model directory empty')
 
     
-    def run_simple(self, imgs):
+    def run_simple(self, img):
 
-        line_results = defaultdict(list)
+        line_result_for_single_image = []
 
         if self.config['Line']['model_backend'] == 'yolov5':
-            for idx, img in enumerate(imgs):
-                result = self.model(img, augment=False)
-                pred = result.pred[0]
-                if pred.size(0) == 0:
+            result = self.model(img, augment=False)
+            pred = result.pred[0]
+            if pred.size(0) == 0:
+                return list()
+            bboxes, confs, labels = pred[:,:4], pred[:,4], pred[:,5]
+            for idx, bbox in enumerate(bboxes):
+                x0, y0, x1, y1 = map(round, bbox.numpy().tolist())
+                line_crop = img.crop((x0, y0, x1, y1))
+                if line_crop.width == 0 or line_crop.height == 0:
                     continue
-                bboxes, confs, labels = pred[:, :4], pred[:, 5], pred[:, 6]
-                for bbox in bboxes:
-                    x0, y0, x1, y1 = map(round, bbox)
-                    line_crop = img[y0:y1, x0:x1]
-                    if line_crop.shape[0] == 0 or line_crop.shape[1] == 0:
-                        continue
-                    line_results[idx].append((np.array(line_crop).astype(np.float32), (y0, x0, y1, x1)))
+                line_result_for_single_image.append((line_crop, (x0, y0, x1, y1)))
         else:
             raise NotImplementedError
 
-        return line_results
+        return line_result_for_single_image
         
 
     def run(self, imgs):

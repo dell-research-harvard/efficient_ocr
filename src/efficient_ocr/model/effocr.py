@@ -60,11 +60,11 @@ class EffOCR:
 
         ## checks
 
-        if self.config['Line']['model_backend'] != "yolov5" or \
-                self.config['Localizer']['model_backend'] != "yolov5" or \
-                self.config['Recognizer']['word']['model_backend'] != "timm" or \
-                self.config['Recognizer']['char']['model_backend'] != "timm":
-            raise NotImplementedError("Only the YOLOv5 and timm backends are currently supported!")
+        # if self.config['Line']['model_backend'] != "yolov5" or \
+        #         self.config['Localizer']['model_backend'] != "yolov5" or \
+                # self.config['Recognizer']['word']['model_backend'] != "timm" or \
+                # self.config['Recognizer']['char']['model_backend'] != "timm":
+            # raise NotImplementedError("Only the YOLOv5 and timm backends are currently supported!")
         
         ## load from args
 

@@ -5,25 +5,21 @@ def test_onnx():
         config={
             'Recognizer': {
                 'char': {
-                    'huggingface_model': 'dell-research-harvard/effocr_en',
                     'model_backend': 'onnx',
                     'model_dir': './char_model_test',
                     'timm_model_name': 'mobilenetv3_small_050.lamb_in1k',
                 },
                 'word': {
-                    'huggingface_model': 'dell-research-harvard/effocr_en',
                     'model_backend': 'onnx',
                     'model_dir': './word_model_test',
                     'timm_model_name': 'mobilenetv3_small_050.lamb_in1k',
                 },
             },
             'Localizer': {
-                'huggingface_model': 'dell-research-harvard/effocr_en',
                 'model_backend': 'onnx',
                 'model_dir': './localizer_model_test',
             },
             'Line': {
-                'huggingface_model': 'dell-research-harvard/effocr_en',
                 'model_backend': 'onnx',
                 'model_dir': './line_model_test',
             },

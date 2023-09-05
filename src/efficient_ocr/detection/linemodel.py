@@ -65,7 +65,7 @@ class LineModel:
 
         elif self.config['Line']['model_backend'] == 'onnx' and not dir_is_empty(self.config['Line']['model_dir']):
             self.model, self._input_name, self._input_shape = \
-                initialize_onnx_model(get_path(self.config['Line']['model_dir'], ext="onnx"), self.config['Line']['training'])
+                initialize_onnx_model(get_path(self.config['Line']['model_dir'], ext="onnx"), self.config['Line'])
 
         elif self.config['Line']['model_backend'] == 'mmdetection':
             raise NotImplementedError('mmdetection not yet implemented!')

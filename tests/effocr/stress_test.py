@@ -47,6 +47,8 @@ if __name__ == '__main__':
     #     }
     # )
     # effocr.train()
+
+    # timm backend for recognizer, yolov5 for localizer
     effocr = EffOCR(
         line_detector='./line_model_effocr_en',
         localizer='./locl_model_effocr_en',
@@ -54,4 +56,60 @@ if __name__ == '__main__':
         char_recognizer='./news_char_model',
     )
     results = effocr.infer('tests/effocr/test_locca_image.jpg')
+    print(results[0].text)
+
+    # ONNX backend for recognizer, yolov5 for localizer
+    effocr = EffOCR(
+        config={
+            'Recognizer': {
+                'char': {
+                    'model_backend': 'onnx',
+                    'model_dir': './char_model_test',
+                    'timm_model_name': 'mobilenetv3_small_050.lamb_in1k',
+                },
+                'word': {
+                    'model_backend': 'onnx',
+                    'model_dir': './word_model_test',
+                    'timm_model_name': 'mobilenetv3_small_050.lamb_in1k',
+                },
+            },
+            'Localizer': {
+                'model_backend': 'yolov5',
+                'model_dir': './locl_model_effocr_en',
+            },
+            'Line': {
+                'model_backend': 'yolov5',
+                'model_dir': './line_model_effocr_en',
+            },
+        }
+    )
+    results = effocr.infer(r'.\tests\fixtures\test_locca_image.jpg')
+    print(results[0].text)
+
+    # ONNX all the way
+    effocr = EffOCR(
+        config={
+            'Recognizer': {
+                'char': {
+                    'model_backend': 'onnx',
+                    'model_dir': './char_model_test',
+                    'timm_model_name': 'mobilenetv3_small_050.lamb_in1k',
+                },
+                'word': {
+                    'model_backend': 'onnx',
+                    'model_dir': './word_model_test',
+                    'timm_model_name': 'mobilenetv3_small_050.lamb_in1k',
+                },
+            },
+            'Localizer': {
+                'model_backend': 'onnx',
+                'model_dir': './localizer_model_test',
+            },
+            'Line': {
+                'model_backend': 'onnx',
+                'model_dir': './line_model_test',
+            },
+        }
+    )
+    results = effocr.infer(r'.\tests\fixtures\test_locca_image.jpg')
     print(results[0].text)

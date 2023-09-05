@@ -82,8 +82,10 @@ def get_crop_embeddings(recognizer_engine, crops, num_streams=4):
     embeddings = [None] * len(crop_batches)
     while not output_queue.empty():
         i, result = output_queue.get()
-        ## TODO: Fix for ONNX as well -- result[0] was right for ONNX
-        embeddings[i] = result # result[0] if len(result.shape) == 3 else result
+
+        if isinstance(result, list):
+            result = result[0]
+        embeddings[i] = result 
 
     # TODO: we don't need to convert to a tensor just to normalize, right?
     embeddings = [torch.nn.functional.normalize(torch.from_numpy(embedding), p=2, dim=1) for embedding in embeddings]
@@ -184,7 +186,7 @@ class Recognizer:
             elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
                 self.model, self.input_name, _ = initialize_onnx_model(
                     get_path(self.config['Recognizer'][self.type]['model_dir'], ext="onnx"), 
-                    self.config['Recognizer'][self.type]['training'])
+                    self.config['Recognizer'][self.type])
 
         elif not get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index") is None:
         
@@ -209,7 +211,7 @@ class Recognizer:
             elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
                 self.model, self.input_name, _ = initialize_onnx_model(
                     get_path(self.config['Recognizer'][self.type]['model_dir'], ext="onnx"), 
-                    self.config['Recognizer'][self.type]['training'])
+                    self.config['Recognizer'][self.type])
 
         else:
 
@@ -217,11 +219,13 @@ class Recognizer:
             self.candidates = None
             self.model = timm.create_model(self.config['Recognizer'][self.type]['timm_model_name'], num_classes=0, pretrained=True)
             self.input_name = None
-            
-        self.model.to(self.config['Recognizer'][self.type]['device'])
-        self.knn_func = FaissKNN(index_init_fn=faiss.IndexFlatIP, reset_before=False, reset_after=False)
-        self.infm = InferenceModel(self.model, knn_func=self.knn_func, data_device='cpu')
-        self.infm.load_knn_func(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index"))
+        
+        if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
+            self.model.eval()
+            self.model.to(self.config['Recognizer'][self.type]['device'])
+            self.knn_func = FaissKNN(index_init_fn=faiss.IndexFlatIP, reset_before=False, reset_after=False)
+            self.infm = InferenceModel(self.model, knn_func=self.knn_func, data_device='cpu')
+            self.infm.load_knn_func(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index"))
 
 
     def __call__(self, images):

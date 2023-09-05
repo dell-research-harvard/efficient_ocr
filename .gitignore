@@ -183,8 +183,8 @@ data/
 runs/
 wandb/
 config/
-effocr_en*
-news_*
+/effocr_en*
+/news_*
 
 
 # legacy recognizer dir

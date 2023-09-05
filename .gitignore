@@ -172,10 +172,11 @@ cython_debug/
 data/
 
 # Some test fixtures
-tests/fixtures/
-tests/
-char_model_test/
-word_model_test/
+/tests/fixtures/
+/char*
+/word*
+/localizer*
+/line*
 
 
 # yolo results

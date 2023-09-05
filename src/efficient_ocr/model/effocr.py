@@ -250,7 +250,6 @@ class EffOCR:
                 }}
         '''
         localizer_results = self.localizer_model(line_results, **kwargs) # Passes back detections and cropped images
-        
         '''
         Last character recognition:
             Input: detections as a dictionary with format as described above

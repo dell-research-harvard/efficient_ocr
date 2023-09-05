@@ -6,7 +6,7 @@ Global:
 
 Recognizer:
   word:
-    model_dir: ./effocr_package_test_locca_word2
+    model_dir: ./models/word_recognizer
     font_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_font_files
     model_backend: onnx
     timm_model_name: mobilenetv3_small_050.lamb_in1k
@@ -51,10 +51,10 @@ Recognizer:
     test_set_from_coco_json:
     num_cores:
     providers:
-    huggingface_model: dell-research-harvard/effocr_en/word_recognizer
+    huggingface_model: 
 
   char:
-    model_dir: ./effocr_package_test_locca_char2
+    model_dir: ./models/char_recognizer
     font_dir_path: /mnt/122a7683-fa4b-45dd-9f13-b18cc4f4a187/jake_github_repos/ocr-as-retrieval/english_font_files
     model_backend: onnx
     timm_model_name: mobilenetv3_small_050.lamb_in1k
@@ -99,16 +99,16 @@ Recognizer:
     test_set_from_coco_json:
     num_cores:
     providers:
-    huggingface_model: dell-research-harvard/effocr_en/char_recognizer
+    huggingface_model: 
 
 Localizer: 
-  model_path: 
+  model_path: C:\Users\bryan\Documents\NBER\img2txt_pipeline_essentials\localizer_model_new.onnx
   mmdet_config: 
   iou_thresh: 0.10
   conf_thresh: 0.25 
   onnx_providers: 
   input_shape: (640, 640)
-  model_backend: yolov5
+  model_backend: onnx
   visualize: 
   num_cores: 
   max_det: 200

@@ -58,6 +58,7 @@ class LocalizerEngineExecutorThread(threading.Thread):
         input_name: str = None
     ):
         super(LocalizerEngineExecutorThread, self).__init__()
+        print(backend)
         self._model = model
         self._input_queue = input_queue
         self._output_queue = output_queue
@@ -152,7 +153,7 @@ class LocalizerModel:
         input_queue = queue.Queue()
         for bbox_idx in line_results.keys():
             for line_idx, line_result in enumerate(line_results[bbox_idx]):
-                input_queue.put((bbox_idx, line_idx, line_result[0]))
+                input_queue.put((bbox_idx, line_idx, self.format_line_img(line_result[0])))
                 localizer_results[bbox_idx][line_idx]['bbox'] = line_result[1]
 
         # Set up the output queue
@@ -162,9 +163,9 @@ class LocalizerModel:
         threads = []
         if self.config['Localizer']['num_cores'] is None:
             self.config['Localizer']['num_cores'] = multiprocessing.cpu_count()
-        
+
         for _ in range(self.config['Localizer']['num_cores']):
-            threads.append(LocalizerEngineExecutorThread(self.model, input_queue, output_queue, input_name = self.input_name))
+            threads.append(LocalizerEngineExecutorThread(self.model, input_queue, output_queue, backend = self.config['Localizer']['model_backend'], input_name = self.input_name))
         
         for thread in threads:
             thread.start()
@@ -177,9 +178,20 @@ class LocalizerModel:
         while not output_queue.empty():
             bbox_idx, im_idx, preds = output_queue.get()
             im = line_results[bbox_idx][im_idx][0]
-            preds = preds.pred[0]
+
+            if self.config['Localizer']['model_backend'] == 'onnx':  
+                preds = torch.from_numpy(preds[0])
+                preds = yolov5_non_max_suppression(preds, conf_thres = self.config['Localizer']['conf_thresh'], iou_thres=self.config['Localizer']['iou_thresh'], max_det=self.config['Localizer']['max_det'])[0]
+
+            elif self.config['Localizer']['model_backend'] == 'yolov5':
+                preds = preds[0]
+
+            elif self._model_backend == 'mmdetection':
+                raise NotImplementedError('mmdetection not yet implemented!')
+
             bboxes, confs, labels = preds[:, :4], preds[:, -2], preds[:, -1]
-            
+            print(bboxes.shape)
+            print(labels)
             if not self.config['Localizer']['vertical']:
                 char_bboxes, word_bboxes = bboxes[labels == 0], bboxes[labels == 1]
                 if word_bboxes.shape[0] > 0:
@@ -280,3 +292,23 @@ class LocalizerModel:
             exist_ok=True)
         
         self.initialize_model()
+
+    def format_line_img(self, img):
+        if self.config['Line']['model_backend'] == 'onnx':
+            im = letterbox(img, stride=32, auto=False)[0]  # padded resize
+            im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+            im = np.ascontiguousarray(im)  # contiguous
+            im = im.astype(np.float32) / 255.0  # 0 - 255 to 0.0 - 1.0
+            if im.ndim == 3:
+                im = np.expand_dims(im, 0)
+        
+        elif self.config['Line']['model_backend'] == 'yolov5':
+            im = img
+
+        elif self.config['Line']['model_backend'] == 'mmdetection':
+            raise NotImplementedError('Backend mmdetection is not implemented')
+            
+        else:
+            raise NotImplementedError('Backend {} is not implemented'.format(self.config['model_backend']))
+        
+        return im

@@ -180,6 +180,10 @@ word_model_test/
 
 # yolo results
 runs/
+wandb/
+config/
+effocr_en*
+news_*
 
 
 # legacy recognizer dir

@@ -6,7 +6,10 @@ import numpy as np
 import yaml
 from collections import defaultdict
 import os
+import torch
 import cv2
+from PIL import Image
+
 # from .detection import infer_line # train_line, train_localizer, infer_line, infer_localizer
 from ..recognition import Recognizer, infer_last_chars, infer_words, infer_chars
 from ..detection import LineModel, LocalizerModel # , word_model, char_model
@@ -28,14 +31,19 @@ class EffOCR:
             data_json = None, data_dir = None, 
             line_detector = None, localizer = None, 
             word_recognizer = None, char_recognizer = None,
-            hf_repo_id = None,
             **kwargs
         ):
 
-        self.training_funcs = {'line_detection': self._train_line,
-                                'word_and_character_detection': self._train_localizer,
-                                'word_recognition': self._train_word_recognizer,
-                                'char_recognition': self._train_char_recognizer}
+        print(f'GPU is available?: {torch.cuda.is_available()}')
+
+        self.training_funcs = {
+            'line_detector': self._train_line,
+            'localizer': self._train_localizer,
+            'word_recognizer': self._train_word_recognizer,
+            'char_recognizer': self._train_char_recognizer
+        }
+
+        ## ingest
         
         if data_json is not None:
             with open(data_json, 'r') as f:
@@ -50,33 +58,50 @@ class EffOCR:
             
         self.config = self._load_config(config, **kwargs)
 
-        if hf_repo_id is not None:
-            self.config['Line']['huggingface_model'] = hf_repo_id
-            self.config['Localizer']['huggingface_model'] = hf_repo_id
-            self.config['Recognizer']['word']['huggingface_model'] = hf_repo_id
-            self.config['Recognizer']['char']['huggingface_model'] = hf_repo_id
+        ## checks
+
+        if self.config['Line']['model_backend'] != "yolov5" or \
+                self.config['Localizer']['model_backend'] != "yolov5" or \
+                self.config['Recognizer']['word']['model_backend'] != "timm" or \
+                self.config['Recognizer']['char']['model_backend'] != "timm":
+            raise NotImplementedError("Only the YOLOv5 and timm backends are currently supported!")
+        
+        ## load from args
 
         if not line_detector is None:
             if os.path.isdir(line_detector):
                 self.config['Line']['model_dir'] = line_detector
             else:
-                self.config['Line']['huggingface_model'] = line_detector
+                self.config['Line']['hf_repo_id'] = line_detector
         if not localizer is None:
             if os.path.isdir(localizer):
                 self.config['Localizer']['model_dir'] = localizer
             else:
-                self.config['Localizer']['huggingface_model'] = localizer
+                self.config['Localizer']['hf_repo_id'] = localizer
         if not word_recognizer is None:
             if os.path.isdir(word_recognizer):
                 self.config['Recognizer']['word']['model_dir'] = word_recognizer
             else:
-                self.config['Recognizer']['word']['huggingface_model'] = word_recognizer
+                self.config['Recognizer']['word']['hf_repo_id'] = word_recognizer
         if not char_recognizer is None:
             if os.path.isdir(char_recognizer):
                 self.config['Recognizer']['char']['model_dir'] = char_recognizer
             else:
-                self.config['Recognizer']['char']['huggingface_model'] = char_recognizer
+                self.config['Recognizer']['char']['hf_repo_id'] = char_recognizer
+
+        ## sensible naming conventions
+
+        if self.config['Line']['hf_repo_id'] is not None and self.config['Line']['model_dir'] == "./line_model":
+            self.config['Line']['model_dir'] = f"./{os.path.basename(self.config['Line']['hf_repo_id'])}"
+        if self.config['Localizer']['hf_repo_id'] is not None and self.config['Localizer']['model_dir'] == "./localizer_model":
+            self.config['Localizer']['model_dir'] = f"./{os.path.basename(self.config['Localizer']['hf_repo_id'])}"
+        if self.config['Recognizer']['char']['hf_repo_id'] is not None and self.config['Recognizer']['char']['model_dir'] == "./char_model":
+            self.config['Recognizer']['char']['model_dir'] = f"./{os.path.basename(self.config['Recognizer']['char']['hf_repo_id'])}"
+        if self.config['Recognizer']['word']['hf_repo_id'] is not None and self.config['Recognizer']['word']['model_dir'] == "./word_model":
+            self.config['Recognizer']['word']['model_dir'] = f"./{os.path.basename(self.config['Recognizer']['word']['hf_repo_id'])}"
         
+        ## subset init
+
         if self.config['Global']['char_only'] and self.config['Global']['recognition_only']:
             self.char_model = self._initialize_char_recognizer()
         elif self.config['Global']['recognition_only']:
@@ -92,8 +117,8 @@ class EffOCR:
             self.char_model = self._initialize_char_recognizer()
             if not self.config['Global']['skip_line_detection']:
                 self.line_model = self._initialize_line()
-            self.localizer_model = self._initialize_localizer()
-        
+            self.localizer_model = self._initialize_localizer()       
+            
 
     def _load_config(self, config, **kwargs):
         
@@ -136,12 +161,19 @@ class EffOCR:
         
         if isinstance(target, str):
             target = [target]
+        elif target is None and self.config['Global']['char_only']:
+            target = ['line_detector', 'localizer', 'char_recognizer']
+        elif target is None and self.config['Global']['recognition_only']:
+            target = ['word_recognizer', 'char_recognizer']
+        elif target is None and self.config['Global']['skip_line_detection']:
+            target = ['localizer', 'word_recognizer', 'char_recognizer']
         elif target is None:
-            target = ['line_detection', 'word_and_character_detection', 'word_recognition', 'char_recognition']
+            target = ['line_detector', 'localizer', 'word_recognizer', 'char_recognizer']
         elif not isinstance(target, list):
             raise ValueError('target must be a single training procedure or a list of training procedures')
 
         for t in target:
+            print(f"\n\n*** TRAINING: {t} ***\n\n")
             if t not in self.training_funcs.keys():
                 raise ValueError('target must be one of {}'.format(self.training_funcs.keys()))
             else:
@@ -164,7 +196,6 @@ class EffOCR:
         self.char_model.train(self.data_json, self.data_dir, **kwargs)
 
     
-    ### TOM
     def infer(self, imgs, make_coco_annotations=None, visualize=None, save_crops = None, **kwargs):
         '''
         Inference pipeline has five steps:
@@ -204,6 +235,7 @@ class EffOCR:
                 3. A list of image paths
                 4. A list of numpy arrays
         '''
+
         if isinstance(imgs, str):
             if os.path.isdir(imgs):
                 imgs = [os.path.join(imgs, img) for img in os.listdir(imgs)]
@@ -226,12 +258,14 @@ class EffOCR:
                 mapping the index of the original image (in the order they were passed from the above function) to a list of tuples, 
                 with each tuple in the format (textline img, (bounding box coordinates (y0, x0, y1, x1)))
         '''
+
         if not self.config['Global']['skip_line_detection']:
             line_results = self.line_model(imgs, **kwargs) 
         else:
             line_results = defaultdict(list)
             for i, img in enumerate(imgs):
                 line_results[i].append((img, (0, 0, img.shape[0], img.shape[1])))
+
         '''
         Word and character localization:
             Input: detections as a defaultdict(list) as described above
@@ -249,6 +283,7 @@ class EffOCR:
                     ...
                 }}
         '''
+
         localizer_results = self.localizer_model(line_results, **kwargs) # Passes back detections and cropped images
         '''
         Last character recognition:
@@ -271,6 +306,7 @@ class EffOCR:
                 Where 'final_puncs' is a list with the same length as the word list for each entry, with the predicted final character of each word, if it is a punctuation mark. 
                 If a punctuation mark was detected, all of the characters list, the overlaps object, and the word image and bounding boxes will be adjusted to reflect that detection. 
         '''
+
         if not self.config['Global']['char_only']:
             # TODO: skip on language from config
             last_char_results = infer_last_chars(localizer_results, self.char_model, **kwargs) # Passes back detections and cropped images
@@ -343,6 +379,7 @@ class EffOCR:
                 text: the full predicted text
                 preds: the full predictions dictionary, as described above
         '''
+
         if make_coco_annotations is not None or visualize is not None or save_crops is not None:
             make_coco_from_effocr_result(final_results, imgs, save_path=make_coco_annotations if isinstance(make_coco_annotations, str) else "./data/coco_annotations.json")
 
@@ -355,6 +392,60 @@ class EffOCR:
 
         return final_results
     
+
+    def infer_simple(self, imgs):
+        
+        if isinstance(imgs, str):
+            if os.path.isdir(imgs):
+                imgs = [os.path.join(imgs, img) for img in os.listdir(imgs)]
+            else:
+                imgs = [imgs]
+
+        elif isinstance(imgs, np.ndarray):
+            imgs = [imgs]
+        elif not isinstance(imgs, list):
+            raise ValueError('imgs must be a single image path/numpy array or a list of image paths/numpy arrays')
+        elif not all([isinstance(img, str) for img in imgs]) or not all([isinstance(img, np.ndarray) for img in imgs]):
+            raise ValueError('imgs must be a single image path/numpy array or a list of image paths/numpy arrays')
+        
+        imgs = [Image.open(img) for img in imgs]
+        img_texts = []
+
+        for img in imgs:
+
+            img_text = ""
+
+            # for a given line: (np.array(line_crop).astype(np.float32), (x0, y0, x1, y1))
+            if not self.config['Global']['skip_line_detection']:
+                line_results = self.line_model.run_simple(img)
+            else:
+                line_results = [(img, (0, 0, img.shape[1], img.shape[0]))]
+
+            localizer_results = self.localizer_model.run_simple(line_results)
+            
+            for line_level_locl_results in localizer_results:
+                if not self.config['Global']['char_only']:
+                    # for a given line: [((word_img, word_coords), [(char_img, char_coords), ...]), ...]
+                    for word_result, char_results in line_level_locl_results:
+                        word_dist, word_cand = self.word_model.run_simple(word_result)
+                        if word_dist[0] >= self.config['Global']['min_word_sim']:
+                            img_text += word_cand + " "
+                        else:
+                            char_dist, char_cand = self.char_model.run_simple(char_results)
+                            img_text += char_cand + " "
+                    img_text += "\n"
+                else: 
+                    # for a given line: [(char_img, char_coords), ...]
+                    char_results = line_level_locl_results
+                    char_dist, char_cand = self.char_model.run_simple(char_results)
+                    img_text += char_cand + "\n"
+
+            print(img_text)
+            img_texts.append(img_text)
+
+        return img_texts
+    
+
     '''
     Model Initialization Functions
     '''

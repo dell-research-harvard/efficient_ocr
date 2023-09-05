@@ -1,26 +1,21 @@
-'''
-Class for EffOCR Localization Model
-'''
-
-
 import os
-import json
 import yolov5
-from yolov5 import train
 import numpy as np
 from collections import defaultdict
 import threading
 import torch
 import queue
-from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub import snapshot_download
 import multiprocessing
+import subprocess
+import torchvision.ops.boxes as bops
 # from mmdet.apis import init_detector, inference_detector
 
 
-from ..utils import letterbox, yolov5_non_max_suppression, yolov8_non_max_suppression, en_preprocess, initialize_onnx_model
+from ..utils import letterbox, yolov5_non_max_suppression, en_preprocess, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
-from ..utils import create_yolo_training_data, create_yolo_yaml
-from ..utils import all_but_last_in_path, last_in_path, get_path, dictmerge, dir_is_empty
+from ..utils import create_yolo_training_data
+from ..utils import get_path, dictmerge, dir_is_empty
 
 
 PARA_WEIGHT_L = 3
@@ -28,13 +23,43 @@ PARA_WEIGHT_R = 1
 PARA_THRESH = 5
 
 
+def box_area(boxes):
+    return (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+
+
+def _box_inter_union_min(boxes1, boxes2):
+
+    area1 = box_area(boxes1)
+    area2 = box_area(boxes2)
+
+    lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])  # [N,M,2]
+    rb = torch.min(boxes1[:, None, 2:], boxes2[:, 2:])  # [N,M,2]
+    wh = rb - lt  # [N,M,2]
+    inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
+
+    union = area1[:, None] + area2 - inter
+    minimum = torch.min(area1[:, None], area2)
+
+    return inter, union, minimum
+
+
+def torch_iom_iou(boxes1, boxes2):
+
+    inter, union, minimum = _box_inter_union_min(boxes1, boxes2)
+    iou = inter / union
+    iom = inter / minimum
+    return iom, iou
+
+
 def iteration(model, input):
     output = model(input)
     return output
 
+
 def onnx_iteration(model, input, input_name):
     output = model.run(None, {input_name: input})
     return output
+
 
 def mmdet_iteration(model, input):
     output = inference_detector(model, input)
@@ -46,6 +71,14 @@ def blank_localizer_response():
             'chars': [],
             'overlaps': [],
             'para_end': False }
+
+
+def safe_coords(x0, y0, x1, y1, line_w, line_h):
+    if x0 == x1 or y0 == y1 or x1 < 0 or y1 < 0 or x0 > line_w or y0 > line_h:
+        return None
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(x1, line_w), min(y1, line_h)
+    return x0, y0, x1, y1
 
 
 class LocalizerEngineExecutorThread(threading.Thread):
@@ -71,27 +104,36 @@ class LocalizerEngineExecutorThread(threading.Thread):
             if self.backend != 'mmdetection' and self.backend != 'onnx':
                 output = iteration(self._model, img)
             elif self.backend == 'onnx':
-                output = onnx_iteration(self._model, img, self.input_name)
+                output = onnx_iteration(self._model, self.onnx_format_img(img), self.input_name)
             else:
                 output = mmdet_iteration(self._model, img)
             self._output_queue.put((bbox_idx, line_idx, output))
 
+    def onnx_format_img(self, img):
+        im = letterbox(img, stride=32, auto=False)[0]  # padded resize
+        im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+        im = np.ascontiguousarray(im)  # contiguous
+        im = im.astype(np.float32) / 255.0  # 0 - 255 to 0.0 - 1.0
+        if im.ndim == 3:
+            im = np.expand_dims(im, 0)
+        return im
+
 
 class LocalizerModel:
 
-    def __init__(self, config):
-        """Instantiates the object, including setting up the wrapped ONNX InferenceSession"""
 
-        '''Set up the config'''
+    def __init__(self, config):
+
         self.config = config
-        if self.config['Localizer']['huggingface_model'] is not None:
-            backend_ext = ".onnx" if self.config['Localizer']['model_backend'] == "onnx" else ".pt"
+
+        if self.config['Localizer']['hf_repo_id'] is not None:
             snapshot_download(
-                repo_id=self.config['Localizer']['huggingface_model'], 
-                allow_patterns="*local*"+backend_ext,
+                repo_id=self.config['Localizer']['hf_repo_id'], 
                 local_dir=self.config['Localizer']['model_dir'],
                 local_dir_use_symlinks=False)
+            
         self.initialize_model()
+
 
     def initialize_model(self):
         """Initializes the model based on the model backend
@@ -100,18 +142,18 @@ class LocalizerModel:
             _type_: _description_
         """
 
-        os.makedirs(self.config['Localizer']['model_dir'], exist_ok=True)
         self.input_name = None
         if self.config['Localizer']['model_backend'] == 'yolov5':
-            if dir_is_empty(self.config['Localizer']['model_dir']):
-                self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+            if get_path(self.config['Localizer']['model_dir'], ext='pt') is None:
+                self.model = yolov5.load('yolov5s.pt')
             else:
+                print("Loading pretrained localizer model!")
                 self.model = yolov5.load(get_path(self.config['Localizer']['model_dir'], ext="pt"), device='cpu')
-            self.model.conf = self.config['Localizer']['conf_thresh']  # NMS confidence threshold
-            self.model.iou = self.config['Localizer']['iou_thresh']  # NMS IoU threshold
+            self.model.conf = self.config['Localizer']['training']['conf_thresh']  # NMS confidence threshold
+            self.model.iou = self.config['Localizer']['training']['iou_thresh']  # NMS IoU threshold
             self.model.agnostic = False  # NMS class-agnostic
             self.model.multi_label = False  # NMS multiple labels per box
-            self.model.max_det = self.config['Localizer']['max_det']  # maximum number of detections per image
+            self.model.max_det = self.config['Localizer']['training']['max_det']  # maximum number of detections per image
         elif self.config['Localizer']['model_backend'] == 'onnx' and not dir_is_empty(self.config['Localizer']['model_dir']):
             self.model, self.input_name, self.input_shape = \
                 initialize_onnx_model(get_path(self.config['Localizer']['model_dir'], ext="onnx"), self.config["Localizer"])
@@ -136,11 +178,82 @@ class LocalizerModel:
             raise ValueError('Invalid model backend specified and/or model directory empty')
         
         
-
     def __call__(self, line_results):
         return self.run(line_results)
     
+
+    def run_simple(self, line_result_for_single_image, thresh=0.75):
+
+        locl_result_for_single_image = []
+        line_result_for_single_image = sorted(
+            line_result_for_single_image, 
+            key=lambda x: x[1][0] if self.config['Localizer']['vertical'] else x[1][1]
+        )
+
+        if self.config['Localizer']['model_backend'] == 'yolov5':
+
+            for line_img, (lx0, ly0, lx1, ly1) in line_result_for_single_image:
+
+                line_h = ly1 - ly0; line_w = lx1 - lx0
+                result = self.model(line_img, augment=False)
+                pred = result.pred[0]
+                pred = pred[pred[:, 1].sort()[1]] if self.config['Localizer']['vertical'] else pred[pred[:, 0].sort()[1]]
+
+                if pred.size(0) == 0:
+                    continue
+
+                bboxes, confs, labels = pred[:,:4], pred[:,4], pred[:,5]
+                char_bboxes = bboxes[labels == 0]
+                word_bboxes = bboxes[labels == 1]
+
+                if not self.config['Global']['char_only']:
+
+                    word_result_char_result_tuples_for_line = []
+                    iom, iou = torch_iom_iou(word_bboxes, char_bboxes)
+
+                    for i, wbbox in enumerate(word_bboxes):
+                        wx0, wy0, wx1, wy1 = map(round, wbbox.numpy().tolist())
+                        wx0, wy0, wx1, wy1 = safe_coords(wx0, wy0, wx1, wy1, line_w, line_h)
+                        word_locl_img = line_img.crop((wx0, wy0, wx1, wy1))
+                        word_result = (word_locl_img, (wx0, wy0, wx1, wy1))
+                        char_results_for_word = []
+                        for j, cbbox in enumerate(char_bboxes):
+                            if iom[i,j] >= thresh:
+                                cx0, cy0, cx1, cy1 = map(round, cbbox.numpy().tolist())
+                                cx0, cy0, cx1, cy1 = safe_coords(cx0, cy0, cx1, cy1, line_w, line_h)
+                                char_locl_img = line_img.crop((cx0, cy0, cx1, cy1))
+                                char_locl_img.save(f"./saved_crops/saveim{j}.png")
+                                char_results_for_word.append((char_locl_img, (cx0, cy0, cx1, cy1)))
+                        word_result_char_result_tuples_for_line.append((word_result, char_results_for_word))
+
+                        # for a given line: [
+                        #   ((word_img, word_coords), [(char_img, char_coords), ...]), 
+                        # ...]
+
+                    locl_result_for_single_image.append(word_result_char_result_tuples_for_line)
+
+                else:
+
+                    char_result_tuples_for_line = []
+                    for i, cbbox in enumerate(char_bboxes):
+                        cx0, cy0, cx1, cy1 = map(round, cbbox.numpy().tolist())
+                        cx0, cy0, cx1, cy1 = safe_coords(cx0, cy0, cx1, cy1, line_w, line_h)
+                        char_locl_img = line_img.crop((cx0, cy0, cx1, cy1))
+                        char_result_tuples_for_line.append((char_locl_img, (cx0, cy0, cx1, cy1)))
+                
+                    # for a given line: 
+                    #   [(char_img, char_coords), ...]
+
+                    locl_result_for_single_image.append(char_result_tuples_for_line)
+
+        else:
+            raise NotImplementedError
+        
+        return locl_result_for_single_image
+
+
     def run(self, line_results):
+
         if not isinstance(line_results, defaultdict):
             raise ValueError('line_results must be a defaultdict(list) with keys corresponding to box ids and lists of tuples as line results for those boxes, with (img, bounding box coordinates)')
         
@@ -165,7 +278,13 @@ class LocalizerModel:
             self.config['Localizer']['num_cores'] = multiprocessing.cpu_count()
 
         for _ in range(self.config['Localizer']['num_cores']):
-            threads.append(LocalizerEngineExecutorThread(self.model, input_queue, output_queue, backend = self.config['Localizer']['model_backend'], input_name = self.input_name))
+            threads.append(
+                LocalizerEngineExecutorThread(
+                    self.model, input_queue, output_queue, 
+                    backend = self.config['Localizer']['model_backend'], 
+                    input_name = self.input_name
+                )
+            )
         
         for thread in threads:
             thread.start()
@@ -176,19 +295,20 @@ class LocalizerModel:
         # Get the results from the output queue
         side_dists  = {bbox_idx: {'l_dists': [None] * len(line_results[bbox_idx]), 'r_dists': [None] * len(line_results[bbox_idx])} for bbox_idx in line_results.keys()}
         while not output_queue.empty():
+            print(output_queue.get())
             bbox_idx, im_idx, preds = output_queue.get()
+            
             im = line_results[bbox_idx][im_idx][0]
-
             if self.config['Localizer']['model_backend'] == 'onnx':  
-                preds = torch.from_numpy(preds[0])
-                preds = yolov5_non_max_suppression(preds, conf_thres = self.config['Localizer']['conf_thresh'], iou_thres=self.config['Localizer']['iou_thresh'], max_det=self.config['Localizer']['max_det'])[0]
-
-            elif self.config['Localizer']['model_backend'] == 'yolov5':
+                preds = [torch.from_numpy(pred) for pred in preds]
+                preds = [yolov5_non_max_suppression(
+                    pred, conf_thres = self.config['Localizer']['training']['conf_thresh'], 
+                    iou_thres=self.config['Localizer']['training']['iou_thresh'], 
+                    max_det=self.config['Localizer']['training']['max_det'])[0] for pred in preds]
                 preds = preds[0]
-
-            elif self._model_backend == 'mmdetection':
-                raise NotImplementedError('mmdetection not yet implemented!')
-
+            else:
+                preds = preds.pred[0]
+            
             bboxes, confs, labels = preds[:, :4], preds[:, -2], preds[:, -1]
             print(bboxes.shape)
             print(labels)
@@ -262,53 +382,54 @@ class LocalizerModel:
 
         return localizer_results
     
+
     def train(self, data_json, data_dir, **kwargs):
+
         if self.config['Localizer']['model_backend'] != 'yolov5':
             raise NotImplementedError('Only YOLO model backend is currently supported for training!')
         
         if kwargs:
             config = dictmerge(config, kwargs)
 
-        """
-        for key in TRAINING_REQUIRED_ARGS:
-            if key not in self.config.keys():
-                raise ValueError(f'Missing required argument {key} for training!')
-        """
+        os.makedirs(self.config['Localizer']['model_dir'], exist_ok=True)
 
         # Create yolo training data from coco
-        data_locs = create_yolo_training_data(data_json, data_dir, 'localizer', self.config["Localizer"]["model_dir"])
-
-        # Create yaml with training data
-        yaml_loc = create_yolo_yaml(data_locs, 'localizer')
-
-        train.run(
-            imgsz=self.config['Localizer']['input_shape'][0], 
-            data=yaml_loc, 
-            weights=get_path(self.config['Localizer']['model_dir'], ext="pt"), 
-            epochs=self.config['Localizer']['epochs'], 
-            batch_size=self.config['Localizer']['batch_size'], 
-            device=self.config['Localizer']['device'],  
-            name = self.config['Localizer']['model_dir'],
-            exist_ok=True)
+        yaml_loc = create_yolo_training_data(
+            data_json, data_dir, target='localizer', 
+            output_dir=self.config["Localizer"]["model_dir"], 
+            char_only=self.config["Global"]["char_only"])
         
+        train_weights = get_path(self.config['Localizer']['model_dir'], ext="pt")
+
+        if self.config['Global']['hf_token_for_upload'] is None:
+            subprocess.run([
+                "yolov5", "train",
+                "--imgsz", str(self.config['Localizer']['training']['input_shape'][0]),
+                "--data", yaml_loc,
+                "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
+                "--epochs", str(self.config['Localizer']['training']['epochs']),
+                "--batch_size", str(self.config['Localizer']['training']['batch_size']),
+                "--device", self.config['Localizer']['device'],
+                "--project", self.config['Localizer']['model_dir'],
+                "--name", "trained"])
+        else:
+            assert self.config['Global']['hf_username_for_upload'] is not None
+            subprocess.run(" ".join([
+                "huggingface-cli", "login", "--token", self.config['Global']['hf_token_for_upload'], 
+                "&&",
+                "yolov5", "train",
+                "--imgsz", str(self.config['Localizer']['training']['input_shape'][0]),
+                "--data", yaml_loc,
+                "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
+                "--epochs", str(self.config['Localizer']['training']['epochs']),
+                "--batch_size", str(self.config['Localizer']['training']['batch_size']),
+                "--device", self.config['Localizer']['device'],
+                "--project", self.config['Localizer']['model_dir'],
+                "--name", "trained",
+                "--hf_model_id", os.path.join(self.config['Global']['hf_username_for_upload'], 
+                                              os.path.basename(self.config['Localizer']['model_dir'])),
+                "--hf_token", self.config['Global']['hf_token_for_upload'],
+                "--hf_private"]), shell=True)
+                        
         self.initialize_model()
 
-    def format_line_img(self, img):
-        if self.config['Line']['model_backend'] == 'onnx':
-            im = letterbox(img, stride=32, auto=False)[0]  # padded resize
-            im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
-            im = np.ascontiguousarray(im)  # contiguous
-            im = im.astype(np.float32) / 255.0  # 0 - 255 to 0.0 - 1.0
-            if im.ndim == 3:
-                im = np.expand_dims(im, 0)
-        
-        elif self.config['Line']['model_backend'] == 'yolov5':
-            im = img
-
-        elif self.config['Line']['model_backend'] == 'mmdetection':
-            raise NotImplementedError('Backend mmdetection is not implemented')
-            
-        else:
-            raise NotImplementedError('Backend {} is not implemented'.format(self.config['model_backend']))
-        
-        return im

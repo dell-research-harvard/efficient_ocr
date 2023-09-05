@@ -2,14 +2,13 @@ import json
 import os
 import cv2
 
-TARGET_LABEL_MAPPING = {0: '0', 1: '1', 2: '0'}
-MATCHING_COCO_CATEGORIES = {'line': [2], 'localizer': [0, 1]}
 
 def create_yolo_training_data(
         coco, 
         img_dir, 
         target, 
-        output_dir, 
+        output_dir,
+        char_only,
         split = [0.8, 0.2]):
     
     if target not in ['line', 'localizer']:
@@ -22,15 +21,20 @@ def create_yolo_training_data(
         pass
     else:
         raise ValueError('coco must be a path to a coco json file or a coco dict')
+    
+    cat_dict = {cat['name']: cat['id'] for cat in coco['categories']}
 
-    target_id = None
-    for cat in coco['categories']:
-        if cat['name'] in target:
-            target_id = cat['id']
-            break
-
-    if target_id is None:
-        raise ValueError('Target {} not found in coco file categories'.format(target))
+    if target == 'localizer':
+        if char_only:
+            coco_cats = [v for k, v in cat_dict.items() if 'char' in k]
+        else:
+            coco_cats = [v for k, v in cat_dict.items() if 'char' in k or 'word' in k]
+    elif target == 'line':
+        coco_cats = [v for k, v in cat_dict.items() if 'line' in k]
+    else:
+        raise NotImplementedError
+    
+    target_label_mapping = {int(cat): str(idx) for idx, cat in enumerate(coco_cats)}
     
     os.makedirs(os.path.join(output_dir, '{}_yolo_data'.format(target)), exist_ok=True)
     os.makedirs(os.path.join(output_dir, '{}_yolo_data/train'.format(target)), exist_ok=True)
@@ -52,7 +56,7 @@ def create_yolo_training_data(
 
         yolo_labels = []
         for ann in coco['annotations']:
-            if ann['image_id'] == img['id'] and ann['category_id'] in MATCHING_COCO_CATEGORIES[target]:
+            if ann['image_id'] == img['id'] and ann['category_id'] in coco_cats:
                 x, y, width, height = ann['bbox']
                 x_center = x + width / 2
                 y_center = y + height / 2
@@ -60,25 +64,23 @@ def create_yolo_training_data(
                 y_center /= h
                 width /= w
                 height /= h
-                yolo_labels.append([TARGET_LABEL_MAPPING[ann['category_id']], x_center, y_center, width, height])
+                yolo_labels.append([target_label_mapping[ann['category_id']], x_center, y_center, width, height])
 
         with open(os.path.join(partition_dir, 'labels', img['file_name'].replace('.png', '.txt')), 'w') as outfile:
             outfile.write('\n'.join([' '.join([str(x) for x in label]) for label in yolo_labels]))
 
-    return os.path.join(output_dir, '{}_yolo_data'.format(target))
-        
-
-
-
-def create_yolo_yaml(path, target):
+    path = os.path.join(output_dir, '{}_yolo_data'.format(target))
 
     names = ['line'] if target == 'line' else ['char', 'word']
 
     with open(os.path.join(path, 'data.yaml'), 'w') as outfile:
         outfile.write('train: {}\n'.format(os.path.abspath(os.path.join(path, 'train', 'images'))))
         outfile.write('val: {}\n'.format(os.path.abspath(os.path.join(path, 'val', 'images'))))
-        outfile.write('nc: {}\n'.format(len(TARGET_LABEL_MAPPING)))
+        outfile.write('nc: {}\n'.format(len(target_label_mapping)))
         outfile.write('names: {}\n'.format(names))
 
     return os.path.join(path, 'data.yaml')
+        
 
+def create_yolo_yaml():
+    pass

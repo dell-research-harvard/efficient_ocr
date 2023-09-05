@@ -57,6 +57,7 @@ def iteration(model, input):
 
 
 def onnx_iteration(model, input, input_name):
+    print(input.shape)
     output = model.run(None, {input_name: input})
     return output
 
@@ -91,7 +92,6 @@ class LocalizerEngineExecutorThread(threading.Thread):
         input_name: str = None
     ):
         super(LocalizerEngineExecutorThread, self).__init__()
-        print(backend)
         self._model = model
         self._input_queue = input_queue
         self._output_queue = output_queue
@@ -266,7 +266,7 @@ class LocalizerModel:
         input_queue = queue.Queue()
         for bbox_idx in line_results.keys():
             for line_idx, line_result in enumerate(line_results[bbox_idx]):
-                input_queue.put((bbox_idx, line_idx, self.format_line_img(line_result[0])))
+                input_queue.put((bbox_idx, line_idx, self.format_localizer_img(line_result[0])))
                 localizer_results[bbox_idx][line_idx]['bbox'] = line_result[1]
 
         # Set up the output queue
@@ -295,7 +295,6 @@ class LocalizerModel:
         # Get the results from the output queue
         side_dists  = {bbox_idx: {'l_dists': [None] * len(line_results[bbox_idx]), 'r_dists': [None] * len(line_results[bbox_idx])} for bbox_idx in line_results.keys()}
         while not output_queue.empty():
-            print(output_queue.get())
             bbox_idx, im_idx, preds = output_queue.get()
             
             im = line_results[bbox_idx][im_idx][0]
@@ -310,8 +309,6 @@ class LocalizerModel:
                 preds = preds.pred[0]
             
             bboxes, confs, labels = preds[:, :4], preds[:, -2], preds[:, -1]
-            print(bboxes.shape)
-            print(labels)
             if not self.config['Localizer']['vertical']:
                 char_bboxes, word_bboxes = bboxes[labels == 0], bboxes[labels == 1]
                 if word_bboxes.shape[0] > 0:
@@ -382,6 +379,28 @@ class LocalizerModel:
 
         return localizer_results
     
+
+    def format_localizer_img(self, img):
+
+        if self.config['Line']['model_backend'] == 'onnx':
+            im = letterbox(img, stride=32, auto=False)[0]  # padded resize
+            im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+            im = np.ascontiguousarray(im)  # contiguous
+            im = im.astype(np.float32) / 255.0  # 0 - 255 to 0.0 - 1.0
+            if im.ndim == 3:
+                im = np.expand_dims(im, 0)
+            return im
+        
+        elif self.config['Line']['model_backend'] == 'yolov5':
+            im = img
+
+        elif self.config['Line']['model_backend'] == 'mmdetection':
+            raise NotImplementedError('Backend mmdetection is not implemented')
+            
+        else:
+            raise NotImplementedError('Backend {} is not implemented'.format(self.config['model_backend']))
+        
+        return im
 
     def train(self, data_json, data_dir, **kwargs):
 

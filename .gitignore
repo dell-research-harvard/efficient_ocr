@@ -177,7 +177,8 @@ data/
 /word*
 /localizer*
 /line*
-
+/tests/effocr/coco_annotations_multi
+/saved_crops
 
 # yolo results
 runs/

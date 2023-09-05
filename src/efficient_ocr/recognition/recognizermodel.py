@@ -82,8 +82,10 @@ def get_crop_embeddings(recognizer_engine, crops, num_streams=4):
     embeddings = [None] * len(crop_batches)
     while not output_queue.empty():
         i, result = output_queue.get()
-        embeddings[i] = result[0]
+        ## TODO: Fix for ONNX as well -- result[0] was right for ONNX
+        embeddings[i] = result # result[0] if len(result.shape) == 3 else result
 
+    # TODO: we don't need to convert to a tensor just to normalize, right?
     embeddings = [torch.nn.functional.normalize(torch.from_numpy(embedding), p=2, dim=1) for embedding in embeddings]
     return embeddings
 
@@ -134,7 +136,7 @@ class RecognizerEngine:
         input = torch.nn.functional.pad(torch.stack(trans_imgs), (0, 0, 0, 0, 0, 0, 0, 64 - len(imgs))).numpy()
 
         if self._backend == 'timm':
-            embeddings = self._model.forward_features(torch.from_numpy(input)).numpy()
+            embeddings = self._model(torch.from_numpy(input)).detach().numpy()
         elif self._backend == 'onnx':
             embeddings = self._model.run(None, {self.input_name: input})
 
@@ -198,7 +200,8 @@ class Recognizer:
 
             if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
                 self.model = timm.create_model(self.config['Recognizer'][self.type]['timm_model_name'], num_classes=0, pretrained=True)
-                pretrained_dict = torch.load(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="pth"))
+                pretrained_dict = torch.load(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="pth"), 
+                                             map_location = torch.device(self.config['Recognizer'][self.type]['device']))
                 pretrained_dict = {k.replace("net.", ""): v for k, v in pretrained_dict.items()}
                 self.model.load_state_dict(pretrained_dict)
                 self.input_name = None

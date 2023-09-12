@@ -162,15 +162,40 @@ class Recognizer:
 
             print(f"Loading (HF) pretrained {self.type} recognizer model!")
 
-            for fn in ['ref.txt', 'ref.index']:
-                hf_hub_download(
-                    repo_id=self.config['Recognizer'][self.type]['hf_repo_id'],
-                    filename=fn,
-                    local_dir=self.config['Recognizer'][self.type]['model_dir'],
-                    local_dir_use_symlinks=False,
-                    token=self.config['Global']['hf_token_for_upload']
-                )
+            # Allow users to append to the huggingface hub repo any inner folders they need to naviagte
+            # Works because hf hub repos will always be owner/repo_name, so anything after is a path
+                
+            # remove any leading or trailing slashes
+            repo_id = self.config['Recognizer'][self.type]['hf_repo_id'].strip('/')
+            # split on slashes
+            if len(repo_id.split('/')) == 2:
+                fn_prefix = ''
+            elif len(repo_id.split('/')) < 2:
+                raise ValueError('hf_repo_id must be in the format owner/repo_name, for example: dell-research-harvard/effocr_en')
+            else:
+                if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
+                    raise ValueError('huggingface models loaded by timm must follow standard conventions. Interior files are not allowed. See https://huggingface.co/docs/timm/hf_hub')
+                else:
+                    fn_prefix = '/'.join(repo_id.split('/')[2:]) + '/' # Careful, order matters here
+                    repo_id = '/'.join(repo_id.split('/')[:2])
 
+            if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
+                model_suffix = '.pth'
+            elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
+                model_suffix = '.onnx'
+
+
+            for fn in ['ref.txt', 'ref.index']:    
+                if not os.path.exists(os.path.join(self.config['Recognizer'][self.type]['model_dir'], fn_prefix + fn)):            
+                    hf_hub_download(
+                        repo_id=repo_id,
+                        filename=fn_prefix+fn,
+                        local_dir=self.config['Recognizer'][self.type]['model_dir'],
+                        local_dir_use_symlinks=False,
+                        token=self.config['Global']['hf_token_for_upload']
+                    )
+            
+            self.config['Recognizer'][self.type]['model_dir'] = os.path.join(self.config['Recognizer'][self.type]['model_dir'], fn_prefix)
             self.index = faiss.read_index(get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index"))
 
             with open(get_path(self.config['Recognizer'][self.type]['model_dir'], "txt"), 'r') as f:
@@ -185,7 +210,10 @@ class Recognizer:
                 self.input_name = None
             elif self.config['Recognizer'][self.type]['model_backend'] == 'onnx':
                 self.model, self.input_name, _ = initialize_onnx_model(
-                    get_path(self.config['Recognizer'][self.type]['model_dir'], ext="onnx"), 
+                    hf_hub_download(repo_id=repo_id,
+                        filename=fn_prefix + 'enc_best' + model_suffix,
+                        local_dir=self.config['Recognizer'][self.type]['model_dir'],
+                        local_dir_use_symlinks=False), 
                     self.config['Recognizer'][self.type])
 
         elif not get_path(self.config['Recognizer'][self.type]['model_dir'], ext="index") is None:

@@ -5,7 +5,7 @@ from collections import defaultdict
 import threading
 import torch
 import queue
-from huggingface_hub import snapshot_download
+from huggingface_hub import hf_hub_download
 import multiprocessing
 import subprocess
 from math import floor, ceil
@@ -119,11 +119,33 @@ class LocalizerModel:
         self.config = config
 
         if self.config['Localizer']['hf_repo_id'] is not None:
-            snapshot_download(
-                repo_id=self.config['Localizer']['hf_repo_id'], 
-                local_dir=self.config['Localizer']['model_dir'],
-                local_dir_use_symlinks=False)
             
+            os.makedirs(self.config['Localizer']['model_dir'], exist_ok=True)
+            
+            # Parse out provided repo_id
+            repo_id = self.config['Localizer']['hf_repo_id'].strip('/')
+            # split on slashes
+            
+            if len(repo_id.split('/')) == 2:
+                fn_prefix = ''
+                fn = 'localizer.pt' if self.config['Localizer']['model_backend'] == 'yolov5' else 'localizer.onnx'
+
+            elif len(repo_id.split('/')) < 2:
+                raise ValueError('hf_repo_id must be in the format owner/repo_name, for example: dell-research-harvard/effocr_en')
+            else:
+                if repo_id.endswith('pt') or repo_id.endswith('onnx'):
+                    fn = '/'.join(repo_id.split('/')[2:])
+                    fn_prefix = ''
+                else:
+                    fn_prefix = '/'.join(repo_id.split('/')[2:]) + '/' # Careful, order matters here
+                    fn = 'localizer.pt' if self.config['Localizer']['model_backend'] == 'yolov5' else 'localizer.onnx'
+                repo_id = '/'.join(repo_id.split('/')[:2])
+
+            if not os.path.exists(os.path.join(self.config['Localizer']['model_dir'], fn_prefix + fn)):
+                hf_hub_download(repo_id = self.config['Localizer']['hf_repo_id'], 
+                                filename = fn_prefix + fn, 
+                                local_dir = self.config['Localizer']['model_dir'])          
+        
         self.initialize_model()
 
 

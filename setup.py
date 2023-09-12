@@ -24,7 +24,7 @@ libinfo_content = open(libinfo_py, 'r', encoding='utf8').readlines()
 
 setup(name         = "efficient_ocr",
       version      = "0.0.5",
-      author       = "Tom Bryan, Abhishek Arora, Jacob Carlson",
+      author       = "Tom Bryan, Abhishek Arora, Jacob Carlson"
       author_email = "bryanptom@gmail.com",
       license      = "Apache-2.0",
       url          = "https://github.com/dell-research-harvard/efficient_ocr",
@@ -57,4 +57,4 @@ setup(name         = "efficient_ocr",
         'wandb'
       ],
       include_package_data=True
-      )
+)

@@ -48,7 +48,7 @@ if __name__ == '__main__':
     # )
     # effocr.train()
 
-    # timm backend for recognizer, yolov5 for localizer
+    # # timm backend for recognizer, yolov5 for localizer
     effocr = EffOCR(
         line_detector='./line_model_effocr_en',
         localizer='./locl_model_effocr_en',
@@ -57,8 +57,9 @@ if __name__ == '__main__':
     )
     results = effocr.infer('tests/effocr/test_locca_image.jpg')
     print(results[0].text)
+    # assert len(results[0].text) > 100
 
-    # ONNX backend for recognizer, yolov5 for localizer
+    # # ONNX backend for recognizer, yolov5 for localizer
     effocr = EffOCR(
         config={
             'Recognizer': {
@@ -84,6 +85,7 @@ if __name__ == '__main__':
         }
     )
     results = effocr.infer(r'.\tests\fixtures\test_locca_image.jpg')
+    # assert len(results[0].text) > 100
     print(results[0].text)
 
     # ONNX all the way

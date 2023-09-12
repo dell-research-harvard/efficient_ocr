@@ -10,7 +10,7 @@ from huggingface_hub import snapshot_download
 from collections import defaultdict
 import subprocess
 
-from ..utils import letterbox, yolov5_non_max_suppression, initialize_onnx_model
+from ..utils import letterbox, yolov8_non_max_suppression, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
 from ..utils import create_yolo_training_data
 from ..utils import get_path, dictmerge, dir_is_empty
@@ -128,7 +128,7 @@ class LineModel:
         # Note: YOLO NMS is carried out now, other backends will filter by bbox confidence score later
         if self.config['Line']['model_backend'] == 'onnx':  
             preds = [torch.from_numpy(pred[0]) for pred in results]
-            preds = [yolov5_non_max_suppression(pred, conf_thres = self.config['Line']['training']['conf_thresh'], iou_thres=self.config['Line']['training']['iou_thresh'], max_det=self.config['Line']['training']['max_det'])[0] for pred in preds]
+            preds = [yolov8_non_max_suppression(pred, conf_thres = self.config['Line']['training']['conf_thresh'], iou_thres=self.config['Line']['training']['iou_thresh'], max_det=self.config['Line']['training']['max_det'])[0] for pred in preds]
         elif self.config['Line']['model_backend'] == 'yolov5':
             preds = [result.pred[0] for result in results]
         elif self.config['Line']['model_backend'] == 'mmdetection':

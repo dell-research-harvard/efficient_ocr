@@ -8,11 +8,12 @@ import queue
 from huggingface_hub import snapshot_download
 import multiprocessing
 import subprocess
+from math import floor, ceil
 import torchvision.ops.boxes as bops
 # from mmdet.apis import init_detector, inference_detector
 
 
-from ..utils import letterbox, yolov5_non_max_suppression, en_preprocess, initialize_onnx_model
+from ..utils import letterbox, yolov8_non_max_suppression, en_preprocess, initialize_onnx_model
 from ..utils import DEFAULT_MEAN, DEFAULT_STD
 from ..utils import create_yolo_training_data
 from ..utils import get_path, dictmerge, dir_is_empty
@@ -57,7 +58,6 @@ def iteration(model, input):
 
 
 def onnx_iteration(model, input, input_name):
-    print(input.shape)
     output = model.run(None, {input_name: input})
     return output
 
@@ -104,19 +104,11 @@ class LocalizerEngineExecutorThread(threading.Thread):
             if self.backend != 'mmdetection' and self.backend != 'onnx':
                 output = iteration(self._model, img)
             elif self.backend == 'onnx':
-                output = onnx_iteration(self._model, self.onnx_format_img(img), self.input_name)
+                output = onnx_iteration(self._model, img, self.input_name)
             else:
                 output = mmdet_iteration(self._model, img)
+            
             self._output_queue.put((bbox_idx, line_idx, output))
-
-    def onnx_format_img(self, img):
-        im = letterbox(img, stride=32, auto=False)[0]  # padded resize
-        im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
-        im = np.ascontiguousarray(im)  # contiguous
-        im = im.astype(np.float32) / 255.0  # 0 - 255 to 0.0 - 1.0
-        if im.ndim == 3:
-            im = np.expand_dims(im, 0)
-        return im
 
 
 class LocalizerModel:
@@ -294,13 +286,14 @@ class LocalizerModel:
 
         # Get the results from the output queue
         side_dists  = {bbox_idx: {'l_dists': [None] * len(line_results[bbox_idx]), 'r_dists': [None] * len(line_results[bbox_idx])} for bbox_idx in line_results.keys()}
+        print('Got localizer results')
         while not output_queue.empty():
             bbox_idx, im_idx, preds = output_queue.get()
             
             im = line_results[bbox_idx][im_idx][0]
             if self.config['Localizer']['model_backend'] == 'onnx':  
                 preds = [torch.from_numpy(pred) for pred in preds]
-                preds = [yolov5_non_max_suppression(
+                preds = [yolov8_non_max_suppression(
                     pred, conf_thres = self.config['Localizer']['training']['conf_thresh'], 
                     iou_thres=self.config['Localizer']['training']['iou_thresh'], 
                     max_det=self.config['Localizer']['training']['max_det'])[0] for pred in preds]
@@ -334,7 +327,13 @@ class LocalizerModel:
                     # If so, eliminate the corresponding entry in the word_char_overlaps list
                     word_char_overlap.pop(i)
                 else:
-                    x0, y0, x1, y1 = int(x0.item()), int(y0.item()), int(x1.item()), int(y1.item())
+                    if self.config['Localizer']['model_backend'] == 'onnx':
+                        im_width, im_height = im.shape[1], im.shape[0]
+                        x0, y0, x1, y1 = int(round(x0.item() * im_width / 640)), 0, int(round(x1.item() * im_width / 640)), im_height
+
+                    else:
+                        x0, y0, x1, y1 = int(x0.item()), int(y0.item()), int(x1.item()), int(y1.item())
+                    
                     localizer_results[bbox_idx][im_idx]['words'].append((im[y0:y1, x0:x1, :], (y0, x0, y1, x1)))
 
             for i, bbox in enumerate(char_bboxes):
@@ -344,8 +343,15 @@ class LocalizerModel:
                     # If so, skip the entry
                     continue
                 else:
+                    # Rescale to correct coordinates if we're using ONNX models
+                    if self.config['Localizer']['model_backend'] == 'onnx':
+                        im_width, im_height = im.shape[1], im.shape[0]
+                        x0, y0, x1, y1 = int(round(x0.item() * im_width / 640)), 0, int(round(x1.item() * im_width / 640)), im_height
+
                     # Note we go ahead and extend characters to the full height of the line
-                    x0, y0, x1, y1 = int(x0.item()), int(y0.item()), int(x1.item()), int(y1.item())
+                    else:
+                        x0, y0, x1, y1 = int(x0.item()), int(y0.item()), int(x1.item()), int(y1.item())
+                    
                     localizer_results[bbox_idx][im_idx]['chars'].append((im[:, x0:x1, :], (y0, x0, y1, x1)))
 
             localizer_results[bbox_idx][im_idx]['overlaps'] = word_char_overlap

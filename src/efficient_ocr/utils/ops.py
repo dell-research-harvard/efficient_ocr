@@ -414,7 +414,10 @@ def make_coco_from_effocr_result(result, imgs, save_path = None, skip_lines = Fa
             json.dump(coco, f, indent=4)
 
 
-def visualize_effocr_result(imgs, annotations_path, save_path):
+def visualize_effocr_result(imgs, annotations_path, save_path, to_display = 'full'):
+    if to_display is None:
+        to_display = 'full'
+        
     with open(annotations_path, 'r') as infile:
         coco = json.load(infile)
 
@@ -467,19 +470,30 @@ def visualize_effocr_result(imgs, annotations_path, save_path):
 
         # Paste the three canvases into the main canvas, with the top height at (1.5 image height) and top corners evenly spaced, starting at .5 image width
         # Scale down all three images to 2/3 of their original size
-        line_canvas = cv2.resize(line_canvas, (2 * img_coco['width'] // 3, 2 * img_coco['height'] // 3))
-        word_canvas = cv2.resize(word_canvas, (2 * img_coco['width'] // 3, 2 * img_coco['height'] // 3))
-        char_canvas = cv2.resize(char_canvas, (2 * img_coco['width'] // 3, 2 * img_coco['height'] // 3))
+        line_canvas_ = cv2.resize(line_canvas, (2 * img_coco['width'] // 3, 2 * img_coco['height'] // 3))
+        word_canvas_ = cv2.resize(word_canvas, (2 * img_coco['width'] // 3, 2 * img_coco['height'] // 3))
+        char_canvas_ = cv2.resize(char_canvas, (2 * img_coco['width'] // 3, 2 * img_coco['height'] // 3))
         y_top = int(1.5 * img_coco['height'])
         x_left = int(.25 * img_coco['width'])
-        canvas[y_top:y_top + line_canvas.shape[0], x_left : x_left + line_canvas.shape[1]] = line_canvas
+        canvas[y_top:y_top + line_canvas_.shape[0], x_left : x_left + line_canvas_.shape[1]] = line_canvas_
         x_left = int(1.166 * img_coco['width'])
-        canvas[y_top:y_top + word_canvas.shape[0], x_left : x_left + word_canvas.shape[1]] = word_canvas
+        canvas[y_top:y_top + word_canvas_.shape[0], x_left : x_left + word_canvas_.shape[1]] = word_canvas_
         x_left = int(2.083 * img_coco['width'])
-        canvas[y_top:y_top + char_canvas.shape[0], x_left : x_left + char_canvas.shape[1]] = char_canvas
+        canvas[y_top:y_top + char_canvas_.shape[0], x_left : x_left + char_canvas_.shape[1]] = char_canvas_
 
+        if to_display == 'full':
+            to_save = canvas
+        elif to_display == 'line':
+            to_save = line_canvas
+        elif to_display == 'word':
+            to_save = word_canvas
+        elif to_display == 'char':
+            to_save = char_canvas
+        else:
+            raise ValueError('to_display must be one of "full", "line", "word", or "char"')
+        
         # Save the canvas to the save_path
         if save_path.endswith('png') or save_path.endswith('jpg'):
-            cv2.imwrite(save_path, canvas)
+            cv2.imwrite(save_path, to_save)
         else:
-            cv2.imwrite(os.path.join(save_path, str(img_idx) + '.png'), canvas)
+            cv2.imwrite(os.path.join(save_path, str(img_idx) + '.png'), to_save)

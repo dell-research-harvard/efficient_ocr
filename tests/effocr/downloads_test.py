@@ -28,5 +28,5 @@ if __name__ == '__main__':
             },
         }
     )
-    results = effocr.infer('tests/effocr/test_locca_image.jpg')
-    print(results[0].text)
+    results = effocr.infer('tests/effocr/test_locca_image.jpg', visualize='test.jpg', to_display='line')
+    

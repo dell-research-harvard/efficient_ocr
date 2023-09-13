@@ -46,10 +46,10 @@ class LineModel:
                     fn = 'line.pt' if self.config['Line']['model_backend'] == 'yolov5' else 'line.onnx'
                 repo_id = '/'.join(repo_id.split('/')[:2])
 
-        if not os.path.exists(os.path.join(self.config['Line']['model_dir'], fn_prefix + fn)):
-            hf_hub_download(repo_id = self.config['Line']['hf_repo_id'], 
-                            filename = fn_prefix + fn, 
-                            local_dir = self.config['Line']['model_dir']) 
+            if not os.path.exists(os.path.join(self.config['Line']['model_dir'], fn_prefix + fn)):
+                hf_hub_download(repo_id = self.config['Line']['hf_repo_id'], 
+                                filename = fn_prefix + fn, 
+                                local_dir = self.config['Line']['model_dir']) 
             
         self.initialize_model()
 

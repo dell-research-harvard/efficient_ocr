@@ -196,7 +196,7 @@ class EffOCR:
         self.char_model.train(self.data_json, self.data_dir, **kwargs)
 
     
-    def infer(self, imgs, make_coco_annotations=None, visualize=None, save_crops = None, **kwargs):
+    def infer(self, imgs, make_coco_annotations=None, visualize=None, save_crops = None, to_display = None, **kwargs):
         '''
         Inference pipeline has five steps:
         1. Loading and formatting images
@@ -386,7 +386,8 @@ class EffOCR:
         if visualize is not None:
             visualize_effocr_result(imgs, 
                                     annotations_path = make_coco_annotations if isinstance(make_coco_annotations, str) else "./data/coco_annotations.json",
-                                    save_path = visualize if isinstance(visualize, str) else "./data/visualized_effocr_result.jpg")
+                                    save_path = visualize if isinstance(visualize, str) else "./data/visualized_effocr_result.jpg",
+                                    to_display = to_display)
                                     # skip_lines = self.config['Global']['skip_line_detection'], char_only = self.config['Global']['char_only']
 
 

@@ -308,7 +308,7 @@ class LocalizerModel:
 
         # Get the results from the output queue
         side_dists  = {bbox_idx: {'l_dists': [None] * len(line_results[bbox_idx]), 'r_dists': [None] * len(line_results[bbox_idx])} for bbox_idx in line_results.keys()}
-        print('Got localizer results')
+
         while not output_queue.empty():
             bbox_idx, im_idx, preds = output_queue.get()
             

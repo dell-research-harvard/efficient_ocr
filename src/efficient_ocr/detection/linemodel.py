@@ -291,10 +291,15 @@ class LineModel:
         os.makedirs(self.config['Line']['model_dir'], exist_ok=True)
             
         # Create yolo training data from coco
-        yaml_loc = create_yolo_training_data(
-            data_json, data_dir, target='line', 
-            output_dir=self.config["Line"]["model_dir"], 
-            char_only=self.config["Global"]["char_only"])
+        if self.config['Line']['training']['training_data_dir'] is None:
+            yaml_loc = create_yolo_training_data(
+                data_json, data_dir, target='line_detection', 
+                output_dir=self.config["Line"]["model_dir"], 
+                char_only=self.config["Global"]["char_only"])
+        elif os.path.isfile(os.path.join(self.config['Line']['training']['training_data_dir'], 'data.yaml')):
+            yaml_loc = os.path.join(self.config['Line']['training']['training_data_dir'], 'data.yaml')
+        else:
+            raise ValueError('Could not find training data yaml file! Please specify a valid training_data_dir in the config file (containing a data.yaml file) or a valid data_json.')
         
         train_weights = get_path(self.config['Line']['model_dir'], ext="pt")
 

@@ -5,6 +5,7 @@ DEFAULT_CONFIG = {
         'char_only': False,
         'recognition_only': False,
         'skip_line_detection': False,
+        'single_model_training': None,
         'wandb_project': None,
         'hf_username_for_upload': None,
         'hf_token_for_upload': None,
@@ -121,6 +122,7 @@ DEFAULT_CONFIG = {
         'providers': None,
         'visualize': None,
         'training': {
+            'training_data_dir': None,
             'batch_size': 16,
             'conf_thresh': 0.25,
             'epochs': 10,
@@ -139,6 +141,7 @@ DEFAULT_CONFIG = {
         'providers': None,
         'visualize': None,
         'training': {
+            'training_data_dir': None,
             'batch_size': 16,
             'conf_thresh': 0.2,
             'epochs': 10,

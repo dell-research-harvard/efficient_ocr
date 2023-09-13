@@ -101,8 +101,20 @@ class EffOCR:
             self.config['Recognizer']['word']['model_dir'] = f"./{os.path.basename(self.config['Recognizer']['word']['hf_repo_id'])}"
         
         ## subset init
+        if self.config['Global']['single_model_training'] is not None:
+            to_train = self.config['Global']['single_model_training']
+            if to_train == 'line_detector':
+                self.line_model = self._initialize_line()
+            elif to_train == 'localizer':
+                self.localizer_model = self._initialize_localizer()
+            elif to_train == 'word_recognizer':
+                self.word_model = self._initialize_word_recognizer()
+            elif to_train == 'char_recognizer':
+                self.char_model = self._initialize_char_recognizer()
+            else:
+                raise ValueError('single_model_training must be one of: line_detector, localizer, word_recognizer, char_recognizer')
 
-        if self.config['Global']['char_only'] and self.config['Global']['recognition_only']:
+        elif self.config['Global']['char_only'] and self.config['Global']['recognition_only']:
             self.char_model = self._initialize_char_recognizer()
         elif self.config['Global']['recognition_only']:
             self.word_model = self._initialize_word_recognizer()
@@ -158,7 +170,6 @@ class EffOCR:
 
 
     def train(self, target = None, **kwargs):
-        
         if isinstance(target, str):
             target = [target]
         elif target is None and self.config['Global']['char_only']:
@@ -171,7 +182,7 @@ class EffOCR:
             target = ['line_detector', 'localizer', 'word_recognizer', 'char_recognizer']
         elif not isinstance(target, list):
             raise ValueError('target must be a single training procedure or a list of training procedures')
-
+            
         for t in target:
             print(f"\n\n*** TRAINING: {t} ***\n\n")
             if t not in self.training_funcs.keys():

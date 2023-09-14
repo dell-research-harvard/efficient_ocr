@@ -313,7 +313,7 @@ class LineModel:
                 "--batch_size", str(self.config['Line']['training']['batch_size']),
                 "--device", self.config['Line']['device'],
                 "--project", self.config['Line']['model_dir'],
-                "--name", "trained"]), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, shell=True)
+                "--name", "trained_line_det"]), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, shell=True)
         else:
             assert self.config['Global']['hf_username_for_upload'] is not None
             p = subprocess.Popen(" ".join([
@@ -327,7 +327,7 @@ class LineModel:
                 "--batch_size", str(self.config['Line']['training']['batch_size']),
                 "--device", self.config['Line']['device'],
                 "--project", self.config['Line']['model_dir'],
-                "--name", "trained",
+                "--name", "trained_line_det",
                 "--hf_model_id", os.path.join(self.config['Global']['hf_username_for_upload'], 
                                               os.path.basename(self.config['Line']['model_dir'])),
                 "--hf_token", self.config['Global']['hf_token_for_upload'],

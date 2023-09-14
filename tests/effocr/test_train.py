@@ -29,5 +29,5 @@ if __name__ == '__main__':
             },
         }
     )
-    print('Training')
-    effocr.train(target = 'line_detector')
+    # print('Training')
+    # effocr.train(target = 'line_detector')

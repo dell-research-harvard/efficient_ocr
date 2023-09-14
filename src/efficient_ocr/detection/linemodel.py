@@ -304,7 +304,7 @@ class LineModel:
         train_weights = get_path(self.config['Line']['model_dir'], ext="pt")
 
         if self.config['Global']['hf_token_for_upload'] is None:
-            subprocess.run([
+            p = subprocess.Popen(' '.join([
                 "yolov5", "train",
                 "--imgsz", str(self.config['Line']['training']['input_shape'][0]),
                 "--data", yaml_loc,
@@ -313,10 +313,10 @@ class LineModel:
                 "--batch_size", str(self.config['Line']['training']['batch_size']),
                 "--device", self.config['Line']['device'],
                 "--project", self.config['Line']['model_dir'],
-                "--name", "trained"])
+                "--name", "trained"]), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, shell=True)
         else:
             assert self.config['Global']['hf_username_for_upload'] is not None
-            subprocess.run(" ".join([
+            p = subprocess.Popen(" ".join([
                 "huggingface-cli", "login", "--token", self.config['Global']['hf_token_for_upload'], 
                 "&&",
                 "yolov5", "train",
@@ -331,7 +331,15 @@ class LineModel:
                 "--hf_model_id", os.path.join(self.config['Global']['hf_username_for_upload'], 
                                               os.path.basename(self.config['Line']['model_dir'])),
                 "--hf_token", self.config['Global']['hf_token_for_upload'],
-                "--hf_private"]), shell=True)
-                        
+                "--hf_private"]), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, shell=True)
+
+        # Stream the output to the console as we train
+        for line in iter(p.stdout.readline, ''):
+            if len(line) > 0:
+                print(line.decode('utf-8').strip('\n'))
+            elif not line:
+                break
+        p.wait()
+
         self.initialize_model()
 

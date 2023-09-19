@@ -462,7 +462,7 @@ class LocalizerModel:
                 "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
                 "--epochs", str(self.config['Localizer']['training']['epochs']),
                 "--batch_size", str(self.config['Localizer']['training']['batch_size']),
-                "--device", self.config['Localizer']['device'],
+                "--device", self.config['Localizer']['training']['device'],
                 "--project", self.config['Localizer']['model_dir'],
                 "--name", "trained_localizer"]), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, shell=True)
             
@@ -477,7 +477,7 @@ class LocalizerModel:
                 "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
                 "--epochs", str(self.config['Localizer']['training']['epochs']),
                 "--batch_size", str(self.config['Localizer']['training']['batch_size']),
-                "--device", self.config['Localizer']['device'],
+                "--device", self.config['Localizer']['training']['device'],
                 "--project", self.config['Localizer']['model_dir'],
                 "--name", "trained_localizer",
                 "--hf_model_id", os.path.join(self.config['Global']['hf_username_for_upload'], 

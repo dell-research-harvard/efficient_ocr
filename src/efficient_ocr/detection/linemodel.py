@@ -311,7 +311,7 @@ class LineModel:
                 "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
                 "--epochs", str(self.config['Line']['training']['epochs']),
                 "--batch_size", str(self.config['Line']['training']['batch_size']),
-                "--device", self.config['Line']['device'],
+                "--device", self.config['Line']['training']['device'],
                 "--project", self.config['Line']['model_dir'],
                 "--name", "trained_line_det"]), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, shell=True)
         else:
@@ -325,7 +325,7 @@ class LineModel:
                 "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
                 "--epochs", str(self.config['Line']['training']['epochs']),
                 "--batch_size", str(self.config['Line']['training']['batch_size']),
-                "--device", self.config['Line']['device'],
+                "--device", self.config['Line']['training']['device'],
                 "--project", self.config['Line']['model_dir'],
                 "--name", "trained_line_det",
                 "--hf_model_id", os.path.join(self.config['Global']['hf_username_for_upload'], 

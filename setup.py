@@ -23,7 +23,7 @@ libinfo_content = open(libinfo_py, 'r', encoding='utf8').readlines()
 # exec(version_line)  # gives __version__
 
 setup(name         = "efficient_ocr",
-      version      = "0.0.9",
+      version      = "0.0.10",
       author       = "Tom Bryan, Abhishek Arora, Jacob Carlson",
       author_email = "bryanptom@gmail.com",
       license      = "Apache-2.0",

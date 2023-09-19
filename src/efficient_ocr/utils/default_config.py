@@ -129,6 +129,7 @@ DEFAULT_CONFIG = {
             'input_shape': [640, 640],
             'iou_thresh': 0.1,
             'max_det': 200,
+            'device': 'cpu'
         }
     },
     'Line': {
@@ -149,6 +150,7 @@ DEFAULT_CONFIG = {
             'iou_thresh': 0.15,
             'max_det': 200,
             'min_seg_ratio': 2,
+            'device': 'cpu'
         }
     },
 }

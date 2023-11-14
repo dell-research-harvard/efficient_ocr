@@ -157,7 +157,7 @@ class Recognizer:
 
 
     def initialize_model(self):
-
+        print('Initializing model...')
         if not self.config['Recognizer'][self.type]['hf_repo_id'] is None:
 
             print(f"Loading (HF) pretrained {self.type} recognizer model!")
@@ -242,13 +242,12 @@ class Recognizer:
                     self.config['Recognizer'][self.type])
 
         else:
-
             self.index = None
             self.candidates = None
             self.model = timm.create_model(self.config['Recognizer'][self.type]['timm_model_name'], num_classes=0, pretrained=True)
             self.input_name = None
         
-        if self.config['Recognizer'][self.type]['model_backend'] == 'timm':
+        if self.config['Recognizer'][self.type]['model_backend'] == 'timm' and self.index is not None:
             self.model.eval()
             self.model.to(self.config['Recognizer'][self.type]['device'])
             self.knn_func = FaissKNN(index_init_fn=faiss.IndexFlatIP, reset_before=False, reset_after=False)
@@ -308,8 +307,9 @@ class Recognizer:
         if not self.config['Recognizer'][self.type]['model_backend'] == 'timm':
             raise NotImplementedError('Training is only supported for timm models')
         
-        assert self.config['Recognizer'][self.type]['training']['render_dict'] is not None
-        assert self.config['Recognizer'][self.type]['training']['font_dir_path'] is not None
+        if not os.path.isdir(self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"]):
+            assert self.config['Recognizer'][self.type]['training']['render_dict'] is not None
+            assert self.config['Recognizer'][self.type]['training']['font_dir_path'] is not None
         
         os.makedirs(self.config['Recognizer'][self.type]["model_dir"], exist_ok=True)
         self.model.to('cuda' if torch.cuda.is_available() else 'cpu')
@@ -329,11 +329,13 @@ class Recognizer:
         """
         Transcriptions are currently being passed along with file names
         """
+        if not os.path.exists(self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"]):
+            self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"] = \
+                os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ready_to_go_training_data")
 
-        self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"] = \
-            os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ready_to_go_training_data")
-
-        if not os.path.exists(os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ready_to_go_training_data")):
+        
+        if not os.path.exists(os.path.join(self.config['Recognizer'][self.type]["model_dir"], "ready_to_go_training_data")) and \
+            not os.path.exists(self.config['Recognizer'][self.type]['training']["ready_to_go_data_dir_path"]):
 
             # extract important metadata
 

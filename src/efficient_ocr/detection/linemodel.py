@@ -304,6 +304,16 @@ class LineModel:
         train_weights = get_path(self.config['Line']['model_dir'], ext="pt")
 
         if self.config['Global']['hf_token_for_upload'] is None:
+            print(' '.join([
+                "yolov5", "train",
+                "--imgsz", str(self.config['Line']['training']['input_shape'][0]),
+                "--data", yaml_loc,
+                "--weights", train_weights if train_weights is not None else 'yolov5s.pt',
+                "--epochs", str(self.config['Line']['training']['epochs']),
+                "--batch_size", str(self.config['Line']['training']['batch_size']),
+                "--device", self.config['Line']['training']['device'],
+                "--project", self.config['Line']['model_dir'],
+                "--name", "trained_line_det"]))
             p = subprocess.Popen(' '.join([
                 "yolov5", "train",
                 "--imgsz", str(self.config['Line']['training']['input_shape'][0]),

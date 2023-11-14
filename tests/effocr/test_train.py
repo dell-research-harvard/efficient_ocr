@@ -12,22 +12,40 @@ def test_line_train():
     effocr.train(target = 'word_and_character_detection', epochs = 1, batch_size = 1, device = 'cpu', localizer_training_name = 'localizer_test')
 
 if __name__ == '__main__':
-    print('Initializing')
+    # effocr = EffOCR(
+    #     config={
+    #         'Global': {
+    #             'single_model_training': 'line_detector'
+    #         },
+    #         'Line': {
+    #             'training': {'epochs': 1,
+    #                          'batch_size': 1,
+    #                          'device': 'cpu',
+    #                          'training_data_dir': r'C:\Users\bryan\Downloads\line_detection\line_detection_en_articles'
+    #                          },
+    #             'model_dir': './models',
+    #             'model_backend': 'yolov5',
+    #         },
+    #     }
+    # )
+    # print('Training')
+    # effocr.train(target = 'line_detector')
     effocr = EffOCR(
         config={
             'Global': {
-                'single_model_training': 'line_detector'
+                'single_model_training': 'char_recognizer'
             },
-            'Line': {
+            'Recognizer': { 'char': {
                 'training': {'epochs': 1,
-                             'batch_size': 1,
-                             'device': 'cpu',
-                             'training_data_dir': r'C:\Users\bryan\Downloads\line_detection\line_detection_en_articles'
+                             'batch_size': 16,
+                             'device': '0',
+                             'ready_to_go_data_dir_path': r'C:\Users\bryan\Downloads\locca_char_crops\locca'
                              },
-                'model_dir': '/models',
-                'model_backend': 'yolov5',
-            },
-        }
+                'model_dir': './models/char_model_test2',
+                'model_backend': 'timm',
+            }},
+        },
+        char_recognizer = './char_model_test2'
     )
-    # print('Training')
-    # effocr.train(target = 'line_detector')
+    print('Training')
+    effocr.train(target = 'char_recognizer')

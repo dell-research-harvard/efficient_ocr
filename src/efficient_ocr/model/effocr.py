@@ -114,6 +114,7 @@ class EffOCR:
             else:
                 raise ValueError('single_model_training must be one of: line_detector, localizer, word_recognizer, char_recognizer')
 
+        ## full init
         elif self.config['Global']['char_only'] and self.config['Global']['recognition_only']:
             self.char_model = self._initialize_char_recognizer()
         elif self.config['Global']['recognition_only']:
@@ -204,6 +205,8 @@ class EffOCR:
 
 
     def _train_char_recognizer(self, **kwargs):
+        print(self.data_json)
+        print(self.data_dir)
         self.char_model.train(self.data_json, self.data_dir, **kwargs)
 
     

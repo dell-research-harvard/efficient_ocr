@@ -60,7 +60,7 @@ def get_transform(type='char', size=224):
         return T.Compose([
             MedianPad(override=(255,255,255)),
             T.ToTensor(),
-            T.Resize((size, size)),
+            T.Resize((size, size), antialias=True),
             T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
             lambda x: x.unsqueeze(0)
         ])
@@ -68,7 +68,7 @@ def get_transform(type='char', size=224):
         return T.Compose([
             MedianPadWord(aspect_cutoff=0),
             T.ToTensor(),
-            T.Resize((size, size)),
+            T.Resize((size, size), antialias=True),
             T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
             lambda x: x.unsqueeze(0)
         ])

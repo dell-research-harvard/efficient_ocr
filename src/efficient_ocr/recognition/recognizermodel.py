@@ -617,8 +617,10 @@ class Recognizer:
                         wandb.log({f"train/{self.type}/lr": scheduler.get_last_lr()[0]})
 
         ## test with best encoder
-
-        self.model.load_state_dict(torch.load(os.path.join(self.config['Recognizer'][self.type]["model_dir"], "best.pth")))
+        if self.datapara == False:
+            self.model.load_state_dict(torch.load(os.path.join(self.config['Recognizer'][self.type]["model_dir"], "best.pth")))
+        else:
+            self.model.module.load_state_dict(torch.load(os.path.join(self.config['Recognizer'][self.type]["model_dir"], "best.pth")))
 
         self.save_ref_index(render_dataset, self.model, self.config['Recognizer'][self.type]["model_dir"])
 

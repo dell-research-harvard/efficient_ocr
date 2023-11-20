@@ -39,7 +39,7 @@ class ResizeWidth:
         _, h, w = image.size()
         new_w =[int(w*p) for p in self.pcts]        
         
-        return T.Resize((h, np.random.choice(new_w)))(image)
+        return T.Resize((h, np.random.choice(new_w)), antialias = True)(image)
 
 
 class TransformLoader:
@@ -163,9 +163,9 @@ def patch_resize(pil_img, patchsize=8, targetsize=224):
     aspect_ratio = w / h if height_larger else h / w
     
     if height_larger:
-        patch_resizer = T.Resize((targetsize, (int(aspect_ratio*targetsize) // patchsize) * patchsize))
+        patch_resizer = T.Resize((targetsize, (int(aspect_ratio*targetsize) // patchsize) * patchsize), antialias=True)
     else:
-        patch_resizer = T.Resize(((int(aspect_ratio*targetsize) // patchsize) * patchsize, targetsize))
+        patch_resizer = T.Resize(((int(aspect_ratio*targetsize) // patchsize) * patchsize, targetsize), antialias=True)
 
     return patch_resizer(pil_img)
 
@@ -202,7 +202,7 @@ def create_render_transform_char(char_trans_version, latin_suggested_augs, size=
             T.RandomGrayscale(p=0.2),
             CharMedianPad(override=(255,255,255)),
             T.ToTensor(),
-            T.Resize((size, size)),
+            T.Resize((size, size), antialias=True),
             T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
         ])
     elif char_trans_version == 1: # suggested for japanese
@@ -219,7 +219,7 @@ def create_render_transform_char(char_trans_version, latin_suggested_augs, size=
             T.RandomGrayscale(p=0.2),
             CharMedianPad(override=(255,255,255)),
             T.ToTensor(),
-            T.Resize((size, size)),
+            T.Resize((size, size), antialias=True),
             T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
         ])
     else:
@@ -261,8 +261,8 @@ def create_render_transform(high_blur, size=224,normalize=True,resize_pad=True):
         # CharMedianPad(override=(255,255,255)) if resize_pad else lambda x: x,
         T.ToTensor(),
         ###We also want to blow up the image. So will first expand it to 2x and then resize to 224 (21-04:1307)
-        T.Resize((size*4, size*4) if resize_pad else lambda x: x),
-        T.Resize((size, size) if resize_pad else lambda x: x),
+        T.Resize((size*4, size*4) if resize_pad else lambda x: x, antialias=True),
+        T.Resize((size, size) if resize_pad else lambda x: x, antialias=True),
         T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD) if normalize else lambda x: x,
     ])
 
@@ -273,7 +273,7 @@ def create_paired_transform(size=224):
         T.ToPILImage(),
         MedianPad(),
         T.ToTensor(),
-        T.Resize((size, size)),
+        T.Resize((size, size), antialias=True),
         T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
     ])
 
@@ -282,7 +282,7 @@ def create_paired_transform_char(size=224):
     return T.Compose([
         CharMedianPad(override=(255,255,255)),
         T.ToTensor(),
-        T.Resize((size, size)),
+        T.Resize((size, size), antialias=True),
         T.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
     ])
 
@@ -292,14 +292,14 @@ def create_inference_transform(size=224):
         T.ToTensor(),
         T.ToPILImage(),
         CharMedianPad(override=(255,255,255)),
-        T.Resize((size, size)),
+        T.Resize((size, size), antialias=True),
     ])
 
 
 def create_inference_transform_char(size=224):
     return T.Compose([
         CharMedianPad(),
-        T.Resize((size, size)),
+        T.Resize((size, size), antialias=True),
         ##Convert to pil image
     ])
 

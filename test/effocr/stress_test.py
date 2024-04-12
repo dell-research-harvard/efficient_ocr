@@ -7,8 +7,8 @@ if __name__ == '__main__':
     #     data_dir='tests/effocr/coco_annotations_multi/images',
     #     config={
     #         'Global': {
-    #             # 'hf_username_for_upload': 'jcarlson',
-    #             # 'hf_token_for_upload': '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',
+    #             # 'hf_username_for_upload': 'XXX',
+    #             # 'hf_token_for_upload': 'XXX',
     #             # 'char_only': True,
     #             # 'recognition_only': True,
     #         },

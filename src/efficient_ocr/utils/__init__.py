@@ -6,6 +6,8 @@ from .transforms import get_transform
 from .yolo import create_yolo_training_data, create_yolo_yaml
 from .misc import dictmerge, get_path, dir_is_empty, all_but_last_in_path, last_in_path
 from .default_config import DEFAULT_CONFIG
+from .gcv_bootstrap import analyze_images, gcv_output_to_coco
+#TODO: Why is this not showing as a package
 
 from .recognition.custom_schedulers import *
 from .recognition.transforms import *

@@ -55,6 +55,40 @@ This COCO-formatted dataset can be used directly for localizer training, and can
 
 By default, English and Japanese language datasets are supported by EffOCR. Other languages are certainly compatible with the EffOCR framework, but it might require that you fork and modify this codebase as appropriate for your application of interest.
 
+### Bootstrapping Google Cloud Vision to transcribe images into COCO format
+
+If you have a large collection of images that you would like to transcribe into COCO format, we provide a way to do this using Google Cloud Vision. 
+
+First, you'll need to set up a Google Cloud account and create a project. Then, you'll need to enable the Cloud Vision API for that project.
+
+Once you have your API key, first use the function `analyze_images` in `utils`. Pass in your API key, image directory, and output directory, and GCV's raw json output will be saved to the output directory.
+
+Sample usage:
+
+```python
+import efficient_ocr as effocr
+effocr.utils.analyze_images(
+    api_key="YOUR_API_KEY_HERE",
+    image_dir="path/to/your/image/dir",
+    output_dir="path/to/your/output/dir"
+)
+```
+
+Then, use the function `gcv_output_to_coco` in `utils` to convert the raw GCV json output to COCO format. Pass in the image directory again, the directory with the GCV json output, and your desired output directory for the COCO-formatted json file.
+
+Sample usage:
+
+```python
+import efficient_ocr as effocr
+effocr.utils.gcv_output_to_coco(
+    image_dir="path/to/your/image/dir",
+    gcv_output_dir="path/to/your/gcv/output/dir",
+    output_dir="path/to/your/coco/output/dir"
+)
+```
+
+The COCO-formatted json file will be saved to the output directory.
+
 ## Logging
 
 By default, EffOCR supports logging with [Weights & Biases](https://wandb.ai/site). We encourage you therefore to set up a W&B account and initiate a `wandb login` command before starting out on the training process.

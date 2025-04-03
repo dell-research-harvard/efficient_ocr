@@ -49,13 +49,13 @@ setup(name         = "efficient_ocr",
         'faiss-cpu',
         'yolov5<=7.0.10',
         'timm',
-        'huggingface_hub',
+        'huggingface_hub==0.24.7',
         'kornia',
-        'pytorch_metric_learning',
-        'transformers',
+        'pytorch_metric_learning==1.6.3',
+        'transformers==4.45.0',
         'albumentations',
         'wandb',
-        'requests'
+        'requests',
       ],
       include_package_data=True
 )

@@ -1,18 +1,29 @@
 from glob import glob
 import os
+import copy
 
-
-def dictmerge(a: dict, b: dict, path=[]):
-    """h/t: https://stackoverflow.com/questions/7204805/how-to-merge-dictionaries-of-dictionaries"""
+def dictmerge(a: dict, b: dict, path=None) -> dict:
+    """Merge two dictionaries recursively without mutating the inputs.
+    
+    This version uses deepcopy so that even nested objects are completely independent.
+    Returns a new dictionary that is the result of merging b into a.
+    """
+    if path is None:
+        path = []
+    # Make a deep copy of a to avoid mutating the original dictionary.
+    result = copy.deepcopy(a)
+    
     for key in b:
-        if key in a:
-            if isinstance(a[key], dict) and isinstance(b[key], dict):
-                dictmerge(a[key], b[key], path + [str(key)])
-            elif a[key] != b[key]:
-                a[key] = b[key] # raise Exception('Conflict at ' + '.'.join(path + [str(key)]))
+        if key in result:
+            if isinstance(result[key], dict) and isinstance(b[key], dict):
+                # Recursively merge the nested dictionaries.
+                result[key] = dictmerge(result[key], b[key], path + [str(key)])
+            elif result[key] != b[key]:
+                # If values differ, copy b's value deeply.
+                result[key] = copy.deepcopy(b[key])
         else:
-            a[key] = b[key]
-    return a
+            result[key] = copy.deepcopy(b[key])
+    return result
 
 
 def get_path(d, contains="", ends_in="", ext="", priority="newest"):
